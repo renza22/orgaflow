@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/supabase_config.dart';
 import '../../../task/presentation/pages/create_task_page.dart';
+import '../../../task/presentation/pages/task_list_page.dart';
 
 class CreateProjectPage extends StatefulWidget {
   const CreateProjectPage({super.key});
@@ -62,14 +63,14 @@ class _CreateProjectPageState extends State<CreateProjectPage> {
 
       if (!mounted) return;
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CreateTaskPage(
-            projectId: project['id'],
-          ),
-        ),
-      );
+Navigator.pushReplacement(
+  context,
+  MaterialPageRoute(
+    builder: (_) => TaskListPage(
+      projectId: project['id'],
+    ),
+  ),
+);
 
     } catch (e) {
 

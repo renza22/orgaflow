@@ -61,17 +61,11 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
         'status': 'backlog'
       });
 
-      showMessage('Task berhasil dibuat');
+showMessage('Task berhasil dibuat');
 
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => TaskListPage(
-            projectId: widget.projectId,
-          ),
-        ),
-      );
+if (!mounted) return;
+
+Navigator.pop(context, true);
 
       titleController.clear();
       descriptionController.clear();
