@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'features/auth/presentation/pages/auth_page.dart';
+import 'features/profile/presentation/pages/profile_page.dart';
+import 'features/onboarding/presentation/pages/onboarding_page.dart' as onboarding;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +25,10 @@ class MyApp extends StatelessWidget {
       title: 'OrgaFlow',
       debugShowCheckedModeBanner: false,
       home: const AuthPage(),
+      routes: {
+        '/onboarding': (context) => onboarding.OnboardingPage(),
+        '/dashboard': (context) => const ProfilePage(),
+      },
     );
   }
 }
