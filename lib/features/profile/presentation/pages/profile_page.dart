@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/session/session_service.dart';
 import '../../../../core/supabase_config.dart';
-import '../../../member/presentation/pages/member_setup_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -16,10 +16,33 @@ class _ProfilePageState extends State<ProfilePage> {
 
   bool isLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    loadCurrentData();
+  }
+
+  Future<void> loadCurrentData() async {
+    final sessionContext =
+        await sessionService.getCurrentContext(refresh: true);
+
+    if (!mounted || sessionContext == null) {
+      return;
+    }
+
+    setState(() {
+      fullNameController.text = sessionContext.profile?.fullName ?? '';
+      capacityController.text =
+          (sessionContext.activeMember?.weeklyCapacityHours ?? 0).toString();
+    });
+  }
+
   Future<void> saveProfile() async {
+    final sessionContext =
+        await sessionService.getCurrentContext(refresh: true);
     final user = supabase.auth.currentUser;
 
-    if (user == null) {
+    if (user == null || sessionContext == null) {
       showMessage('User belum login');
       return;
     }
@@ -48,14 +71,14 @@ class _ProfilePageState extends State<ProfilePage> {
         'full_name': fullName,
       }).eq('id', user.id);
 
+      if (sessionContext.activeMember != null) {
+        await supabase.from('members').update({
+          'weekly_capacity_hours': capacity,
+        }).eq('id', sessionContext.activeMember!.id);
+      }
+
+      await sessionService.clearCache();
       showMessage('Profile berhasil disimpan');
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const MemberSetupPage(),
-        ),
-      );
     } catch (e) {
       showMessage('Gagal menyimpan profile: $e');
     } finally {

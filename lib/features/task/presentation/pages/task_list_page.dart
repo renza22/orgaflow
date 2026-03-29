@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/supabase_config.dart';
 import '../../../assignment/presentation/pages/assign_task_page.dart';
 import '../../../dependency/presentation/pages/manage_dependency_page.dart';
 import '../../../workload/presentation/pages/workload_dashboard_page.dart';
+import '../../domain/models/task_model.dart';
+import '../presenters/task_list_presenter.dart';
 import 'create_task_page.dart';
 
 class TaskListPage extends StatefulWidget {
@@ -19,7 +20,8 @@ class TaskListPage extends StatefulWidget {
 }
 
 class _TaskListPageState extends State<TaskListPage> {
-  List tasks = [];
+  final TaskListPresenter _presenter = TaskListPresenter();
+  List<TaskModel> tasks = [];
   bool isLoading = true;
 
   @override
@@ -29,93 +31,40 @@ class _TaskListPageState extends State<TaskListPage> {
   }
 
   Future<void> fetchTasks() async {
-    try {
-      setState(() {
-        isLoading = true;
-      });
+    setState(() {
+      isLoading = true;
+    });
 
-      final data = await supabase
-          .from('tasks')
-          .select()
-          .eq('project_id', widget.projectId)
-          .order('created_at', ascending: false);
+    final result = await _presenter.fetchTasks(widget.projectId);
 
-      setState(() {
-        tasks = data;
-        isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
-
-      showMessage('Gagal mengambil tasks: $e');
+    if (!mounted) {
+      return;
     }
+
+    if (result.isFailure) {
+      setState(() {
+        isLoading = false;
+      });
+      showMessage(result.error!.message);
+      return;
+    }
+
+    setState(() {
+      tasks = result.data!;
+      isLoading = false;
+    });
   }
 
   Future<void> evaluateTaskStatuses() async {
-    try {
-      final allTasks = await supabase
-          .from('tasks')
-          .select()
-          .eq('project_id', widget.projectId);
+    final result = await _presenter.evaluateTaskStatuses(widget.projectId);
 
-      for (final task in allTasks) {
-        final dependencies = await supabase
-            .from('task_dependencies')
-            .select('depends_on_task_id')
-            .eq('task_id', task['id']);
-
-        if (dependencies.isEmpty) {
-          if (task['status'] == 'blocked') {
-            await supabase
-                .from('tasks')
-                .update({'status': 'todo'})
-                .eq('id', task['id']);
-          }
-          continue;
-        }
-
-        bool hasUnfinishedDependency = false;
-
-        for (final dependency in dependencies) {
-          final dependencyTaskList = await supabase
-              .from('tasks')
-              .select('status')
-              .eq('id', dependency['depends_on_task_id']);
-
-          if (dependencyTaskList.isNotEmpty) {
-            final dependencyTask = dependencyTaskList.first;
-
-            if (dependencyTask['status'] != 'done') {
-              hasUnfinishedDependency = true;
-              break;
-            }
-          }
-        }
-
-        if (hasUnfinishedDependency) {
-          if (task['status'] != 'blocked') {
-            await supabase
-                .from('tasks')
-                .update({'status': 'blocked'})
-                .eq('id', task['id']);
-          }
-        } else {
-          if (task['status'] == 'blocked') {
-            await supabase
-                .from('tasks')
-                .update({'status': 'todo'})
-                .eq('id', task['id']);
-          }
-        }
-      }
-
-      await fetchTasks();
-      showMessage('Status task berhasil dievaluasi');
-    } catch (e) {
-      showMessage('Gagal mengevaluasi status task: $e');
+    if (result.isFailure) {
+      showMessage(result.error!.message);
+      return;
     }
+
+    await fetchTasks();
+    showMessage('Status task berhasil dievaluasi');
   }
 
   Future<void> updateTaskStatus({
@@ -181,17 +130,18 @@ class _TaskListPageState extends State<TaskListPage> {
 
     if (result == null) return;
 
-    try {
-      await supabase
-          .from('tasks')
-          .update({'status': result})
-          .eq('id', taskId);
+    final updateResult = await _presenter.updateTaskStatus(
+      taskId: taskId,
+      status: result,
+    );
 
-      showMessage('Status task berhasil diperbarui');
-      await fetchTasks();
-    } catch (e) {
-      showMessage('Gagal memperbarui status task: $e');
+    if (updateResult.isFailure) {
+      showMessage(updateResult.error!.message);
+      return;
     }
+
+    showMessage('Status task berhasil diperbarui');
+    await fetchTasks();
   }
 
   Color statusColor(String? status) {
@@ -220,23 +170,23 @@ class _TaskListPageState extends State<TaskListPage> {
   }
 
   String formatStatus(String? status) {
-  switch (status) {
-    case 'blocked':
-      return 'Menunggu Task Lain';
-    case 'in_progress':
-      return 'Sedang Dikerjakan';
-    case 'in_review':
-      return 'Dalam Review';
-    case 'todo':
-      return 'Belum Dikerjakan';
-    case 'done':
-      return 'Selesai';
-    case 'backlog':
-      return 'Backlog';
-    default:
-      return status ?? '-';
+    switch (status) {
+      case 'blocked':
+        return 'Menunggu Task Lain';
+      case 'in_progress':
+        return 'Sedang Dikerjakan';
+      case 'in_review':
+        return 'Dalam Review';
+      case 'todo':
+        return 'Belum Dikerjakan';
+      case 'done':
+        return 'Selesai';
+      case 'backlog':
+        return 'Backlog';
+      default:
+        return status ?? '-';
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -302,30 +252,27 @@ class _TaskListPageState extends State<TaskListPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    task['title'] ?? '-',
+                                    task.title,
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  if (task['description'] != null &&
-                                      task['description']
-                                          .toString()
-                                          .isNotEmpty)
-                                    Text(task['description']),
+                                  if ((task.description ?? '').isNotEmpty)
+                                    Text(task.description!),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'Estimasi: ${task['estimated_hours']} jam',
+                                    'Estimasi: ${task.estimatedHours} jam',
                                     style: const TextStyle(fontSize: 12),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Status: ${formatStatus(task['status'])}',
+                                    'Status: ${formatStatus(task.status)}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: statusColor(task['status']),
+                                      color: statusColor(task.status),
                                     ),
                                   ),
                                 ],
@@ -347,7 +294,7 @@ class _TaskListPageState extends State<TaskListPage> {
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
-                                      task['priority'] ?? '-',
+                                      task.priority,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(fontSize: 12),
                                     ),
@@ -362,7 +309,7 @@ class _TaskListPageState extends State<TaskListPage> {
                                           context,
                                           MaterialPageRoute(
                                             builder: (_) => AssignTaskPage(
-                                              taskId: task['id'],
+                                              taskId: task.id,
                                             ),
                                           ),
                                         );
@@ -386,7 +333,7 @@ class _TaskListPageState extends State<TaskListPage> {
                                           MaterialPageRoute(
                                             builder: (_) =>
                                                 ManageDependencyPage(
-                                              taskId: task['id'],
+                                              taskId: task.id,
                                               projectId: widget.projectId,
                                             ),
                                           ),
@@ -407,9 +354,8 @@ class _TaskListPageState extends State<TaskListPage> {
                                     child: OutlinedButton(
                                       onPressed: () async {
                                         await updateTaskStatus(
-                                          taskId: task['id'],
-                                          currentStatus:
-                                              task['status'] ?? 'backlog',
+                                          taskId: task.id,
+                                          currentStatus: task.status,
                                         );
                                       },
                                       child: const Text(

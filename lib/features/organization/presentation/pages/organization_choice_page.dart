@@ -2,6 +2,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../../onboarding/domain/models/master_option.dart';
+import '../../domain/models/create_organization_input.dart';
+import '../../domain/models/join_organization_input.dart';
+import '../presenters/organization_presenter.dart';
+
 class OrganizationChoicePage extends StatefulWidget {
   const OrganizationChoicePage({super.key});
 
@@ -9,14 +14,19 @@ class OrganizationChoicePage extends StatefulWidget {
   State<OrganizationChoicePage> createState() => _OrganizationChoicePageState();
 }
 
-class _OrganizationChoicePageState extends State<OrganizationChoicePage> with TickerProviderStateMixin {
+class _OrganizationChoicePageState extends State<OrganizationChoicePage>
+    with TickerProviderStateMixin {
   String? mode; // null, 'create', 'join'
   final organizationNameController = TextEditingController();
   String? selectedOrgType;
   final organizationCodeController = TextEditingController();
+  final OrganizationPresenter _presenter = OrganizationPresenter();
   String generatedCode = '';
   bool copied = false;
   String errorMessage = '';
+  bool isSubmitting = false;
+  bool isLoadingOrgTypes = false;
+  List<MasterOption> orgTypeOptions = [];
 
   late AnimationController _orb1Controller;
   late AnimationController _orb2Controller;
@@ -24,23 +34,25 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
   late AnimationController _orb4Controller;
   late AnimationController _orb5Controller;
 
-  final List<String> orgTypes = [
-    'Himpunan Mahasiswa',
-    'Unit Kegiatan Mahasiswa',
-    'Badan Eksekutif Mahasiswa',
-    'Senat Mahasiswa',
-    'Komunitas',
-    'Lainnya',
-  ];
-
   @override
   void initState() {
     super.initState();
-    _orb1Controller = AnimationController(vsync: this, duration: const Duration(seconds: 9))..repeat(reverse: true);
-    _orb2Controller = AnimationController(vsync: this, duration: const Duration(seconds: 11))..repeat(reverse: true);
-    _orb3Controller = AnimationController(vsync: this, duration: const Duration(seconds: 25))..repeat();
-    _orb4Controller = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat(reverse: true);
-    _orb5Controller = AnimationController(vsync: this, duration: const Duration(seconds: 10))..repeat(reverse: true);
+    _orb1Controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 9))
+          ..repeat(reverse: true);
+    _orb2Controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 11))
+          ..repeat(reverse: true);
+    _orb3Controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 25))
+          ..repeat();
+    _orb4Controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 8))
+          ..repeat(reverse: true);
+    _orb5Controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 10))
+          ..repeat(reverse: true);
+    loadOrganizationTypes();
   }
 
   @override
@@ -55,43 +67,136 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
     super.dispose();
   }
 
-  String generateOrgCode(String orgName) {
-    final prefix = orgName.split(' ').map((word) => word.isNotEmpty ? word[0] : '').join('').toUpperCase();
-    final prefixTrimmed = prefix.length > 4 ? prefix.substring(0, 4) : prefix;
-    final random = (math.Random().nextDouble() * 10000).toInt().toString().padLeft(4, '0');
-    final year = DateTime.now().year;
-    return '$prefixTrimmed-$year-$random';
+  List<String> get orgTypes {
+    return orgTypeOptions.map((item) => item.label).toList();
   }
 
-  void handleCreateOrganization() {
-    if (organizationNameController.text.trim().isEmpty || selectedOrgType == null) {
+  Future<void> loadOrganizationTypes() async {
+    setState(() {
+      isLoadingOrgTypes = true;
+    });
+
+    final result = await _presenter.loadOrganizationTypes();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      isLoadingOrgTypes = false;
+      if (result.isSuccess) {
+        orgTypeOptions = result.data!;
+      }
+    });
+
+    if (result.isFailure) {
+      setState(() {
+        errorMessage = result.error!.message;
+      });
+    }
+  }
+
+  MasterOption? get selectedOrgTypeOption {
+    for (final option in orgTypeOptions) {
+      if (option.label == selectedOrgType) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  Future<void> handleCreateOrganization() async {
+    if (organizationNameController.text.trim().isEmpty ||
+        selectedOrgType == null) {
       setState(() => errorMessage = 'Mohon lengkapi semua field');
       return;
     }
-    final code = generateOrgCode(organizationNameController.text);
+
+    final orgType = selectedOrgTypeOption;
+    if (orgType == null) {
+      setState(() => errorMessage = 'Jenis organisasi tidak valid');
+      return;
+    }
+
     setState(() {
-      generatedCode = code;
       errorMessage = '';
+      isSubmitting = true;
+    });
+
+    final result = await _presenter.createOrganization(
+      CreateOrganizationInput(
+        name: organizationNameController.text.trim(),
+        typeCode: orgType.code,
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      isSubmitting = false;
+    });
+
+    if (result.isFailure) {
+      setState(() {
+        errorMessage = result.error!.message;
+      });
+      return;
+    }
+
+    setState(() {
+      generatedCode = result.data?.inviteCode ?? '';
     });
   }
 
-  void handleJoinOrganization() {
+  Future<void> handleJoinOrganization() async {
     if (organizationCodeController.text.trim().isEmpty) {
       setState(() => errorMessage = 'Mohon masukkan kode organisasi');
       return;
     }
     final codePattern = RegExp(r'^[A-Z0-9]+-\d{4}-[A-Z0-9]+$');
     if (!codePattern.hasMatch(organizationCodeController.text.toUpperCase())) {
-      setState(() => errorMessage = 'Format kode tidak valid. Contoh: HMTI-2026-ABC1');
+      setState(() =>
+          errorMessage = 'Format kode tidak valid. Contoh: HMTI-2026-ABC1');
       return;
     }
+
+    setState(() {
+      errorMessage = '';
+      isSubmitting = true;
+    });
+
+    final result = await _presenter.joinOrganization(
+      JoinOrganizationInput(
+        inviteCode: organizationCodeController.text.trim().toUpperCase(),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      isSubmitting = false;
+    });
+
+    if (result.isFailure) {
+      setState(() {
+        errorMessage = result.error!.message;
+      });
+      return;
+    }
+
     Navigator.pushReplacementNamed(context, '/onboarding');
   }
 
   void handleCopyCode() {
     // In Flutter, we'll show a snackbar instead
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Kode disalin: $generatedCode'), duration: const Duration(seconds: 2)),
+      SnackBar(
+          content: Text('Kode disalin: $generatedCode'),
+          duration: const Duration(seconds: 2)),
     );
     setState(() => copied = true);
     Future.delayed(const Duration(seconds: 2), () {
@@ -106,7 +211,7 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     if (mode == null) {
       return _buildChoiceScreen(theme);
     } else if (mode == 'create') {
@@ -159,14 +264,19 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
       child: ElevatedButton.icon(
         onPressed: () => Navigator.pop(context),
         icon: const Icon(Icons.arrow_back, size: 16),
-        label: const Text('Kembali', style: TextStyle(fontWeight: FontWeight.w500)),
+        label: const Text('Kembali',
+            style: TextStyle(fontWeight: FontWeight.w500)),
         style: ElevatedButton.styleFrom(
           backgroundColor: theme.cardColor.withOpacity(0.6),
           foregroundColor: theme.textTheme.bodyLarge?.color,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-      ).animate().fadeIn(duration: 600.ms, delay: 100.ms).slideX(begin: -0.2, end: 0),
+      )
+          .animate()
+          .fadeIn(duration: 600.ms, delay: 100.ms)
+          .slideX(begin: -0.2, end: 0),
     );
   }
 
@@ -185,7 +295,9 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
             ),
           ),
           child: const Icon(Icons.business, size: 32, color: Colors.white),
-        ).animate().scale(begin: const Offset(0, 0), delay: 200.ms, duration: 600.ms),
+        )
+            .animate()
+            .scale(begin: const Offset(0, 0), delay: 200.ms, duration: 600.ms),
         const SizedBox(height: 24),
         ShaderMask(
           shaderCallback: (bounds) => LinearGradient(
@@ -193,7 +305,8 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
           ).createShader(bounds),
           child: const Text(
             'Pilih "Rumah" Organisasi',
-            style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(
+                fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
             textAlign: TextAlign.center,
           ),
         ).animate().fadeIn(delay: 200.ms),
@@ -259,26 +372,42 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               gradient: LinearGradient(
-                colors: [theme.colorScheme.primary.withOpacity(0.2), theme.colorScheme.secondary.withOpacity(0.1)],
+                colors: [
+                  theme.colorScheme.primary.withOpacity(0.2),
+                  theme.colorScheme.secondary.withOpacity(0.1)
+                ],
               ),
             ),
-            child: Icon(Icons.person_add, size: 48, color: theme.colorScheme.primary),
+            child: Icon(Icons.person_add,
+                size: 48, color: theme.colorScheme.primary),
           ),
           const SizedBox(height: 32),
           ShaderMask(
             shaderCallback: (bounds) => LinearGradient(
-              colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)],
+              colors: [
+                theme.colorScheme.primary,
+                theme.colorScheme.primary.withOpacity(0.8)
+              ],
             ).createShader(bounds),
-            child: const Text('Buat Organisasi Baru', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
+            child: const Text('Buat Organisasi Baru',
+                style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
           ),
           const SizedBox(height: 16),
-          Text('Anda adalah Ketua atau Admin yang ingin memulai organisasi baru dari awal.', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+          Text(
+              'Anda adalah Ketua atau Admin yang ingin memulai organisasi baru dari awal.',
+              style: TextStyle(fontSize: 14, color: Colors.grey[600])),
           const SizedBox(height: 32),
-          _buildFeatureItem(theme, 'Jadi Admin/Ketua secara otomatis', theme.colorScheme.primary),
+          _buildFeatureItem(theme, 'Jadi Admin/Ketua secara otomatis',
+              theme.colorScheme.primary),
           const SizedBox(height: 16),
-          _buildFeatureItem(theme, 'Dapatkan kode organisasi unik', theme.colorScheme.primary),
+          _buildFeatureItem(theme, 'Dapatkan kode organisasi unik',
+              theme.colorScheme.primary),
           const SizedBox(height: 16),
-          _buildFeatureItem(theme, 'Undang anggota dengan kode', theme.colorScheme.primary),
+          _buildFeatureItem(
+              theme, 'Undang anggota dengan kode', theme.colorScheme.primary),
           const SizedBox(height: 40),
           SizedBox(
             width: double.infinity,
@@ -288,14 +417,19 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
               style: ElevatedButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Mulai Buat Organisasi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              child: const Text('Mulai Buat Organisasi',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 300.ms, duration: 600.ms).slideY(begin: 0.2, end: 0);
+    )
+        .animate()
+        .fadeIn(delay: 300.ms, duration: 600.ms)
+        .slideY(begin: 0.2, end: 0);
   }
 
   Widget _buildJoinCard(ThemeData theme) {
@@ -323,26 +457,42 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               gradient: LinearGradient(
-                colors: [theme.colorScheme.primary.withOpacity(0.2), theme.colorScheme.secondary.withOpacity(0.1)],
+                colors: [
+                  theme.colorScheme.primary.withOpacity(0.2),
+                  theme.colorScheme.secondary.withOpacity(0.1)
+                ],
               ),
             ),
-            child: Icon(Icons.confirmation_number, size: 48, color: theme.colorScheme.primary),
+            child: Icon(Icons.confirmation_number,
+                size: 48, color: theme.colorScheme.primary),
           ),
           const SizedBox(height: 32),
           ShaderMask(
             shaderCallback: (bounds) => LinearGradient(
-              colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)],
+              colors: [
+                theme.colorScheme.primary,
+                theme.colorScheme.primary.withOpacity(0.8)
+              ],
             ).createShader(bounds),
-            child: const Text('Gabung Organisasi', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
+            child: const Text('Gabung Organisasi',
+                style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
           ),
           const SizedBox(height: 16),
-          Text('Anda adalah Anggota yang sudah mendapat kode undangan dari Ketua atau Admin.', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+          Text(
+              'Anda adalah Anggota yang sudah mendapat kode undangan dari Ketua atau Admin.',
+              style: TextStyle(fontSize: 14, color: Colors.grey[600])),
           const SizedBox(height: 32),
-          _buildFeatureItem(theme, 'Masukkan kode organisasi', theme.colorScheme.primary),
+          _buildFeatureItem(
+              theme, 'Masukkan kode organisasi', theme.colorScheme.primary),
           const SizedBox(height: 16),
-          _buildFeatureItem(theme, 'Bergabung sebagai Anggota', theme.colorScheme.primary),
+          _buildFeatureItem(
+              theme, 'Bergabung sebagai Anggota', theme.colorScheme.primary),
           const SizedBox(height: 16),
-          _buildFeatureItem(theme, 'Langsung akses dashboard tim', theme.colorScheme.primary),
+          _buildFeatureItem(
+              theme, 'Langsung akses dashboard tim', theme.colorScheme.primary),
           const SizedBox(height: 40),
           SizedBox(
             width: double.infinity,
@@ -352,14 +502,19 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
               style: ElevatedButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Gabung dengan Kode', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              child: const Text('Gabung dengan Kode',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 400.ms, duration: 600.ms).slideY(begin: 0.2, end: 0);
+    )
+        .animate()
+        .fadeIn(delay: 400.ms, duration: 600.ms)
+        .slideY(begin: 0.2, end: 0);
   }
 
   Widget _buildFeatureItem(ThemeData theme, String text, Color color) {
@@ -370,7 +525,8 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
           height: 24,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: LinearGradient(colors: [color.withOpacity(0.2), color.withOpacity(0.1)]),
+            gradient: LinearGradient(
+                colors: [color.withOpacity(0.2), color.withOpacity(0.1)]),
           ),
           child: Icon(Icons.check_circle, size: 16, color: color),
         ),
@@ -407,7 +563,9 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                     border: Border.all(color: theme.dividerColor),
                   ),
                   padding: const EdgeInsets.all(32),
-                  child: generatedCode.isEmpty ? _buildCreateForm(theme) : _buildSuccessScreen(theme),
+                  child: generatedCode.isEmpty
+                      ? _buildCreateForm(theme)
+                      : _buildSuccessScreen(theme),
                 ),
               ),
             ),
@@ -425,15 +583,25 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
           height: 64,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)]),
+            gradient: LinearGradient(colors: [
+              theme.colorScheme.primary,
+              theme.colorScheme.primary.withOpacity(0.8)
+            ]),
           ),
           child: const Icon(Icons.add, size: 32, color: Colors.white),
         ),
         const SizedBox(height: 16),
-        const Text('Buat Organisasi Baru', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        const Text('Buat Organisasi Baru',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        Text('Anda akan menjadi Admin/Ketua organisasi ini', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+        Text('Anda akan menjadi Admin/Ketua organisasi ini',
+            style: TextStyle(fontSize: 14, color: Colors.grey[600])),
         const SizedBox(height: 32),
+        if (isLoadingOrgTypes)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 20),
+            child: LinearProgressIndicator(),
+          ),
         _buildTextField(
           controller: organizationNameController,
           label: 'Nama Organisasi',
@@ -464,7 +632,8 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.red.withOpacity(0.3)),
             ),
-            child: Text(errorMessage, style: const TextStyle(color: Colors.red, fontSize: 14)),
+            child: Text(errorMessage,
+                style: const TextStyle(color: Colors.red, fontSize: 14)),
           ),
         ],
         const SizedBox(height: 32),
@@ -475,7 +644,8 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                 onPressed: () => setState(() => mode = null),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 child: const Text('Kembali'),
               ),
@@ -483,14 +653,17 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
-                onPressed: handleCreateOrganization,
+                onPressed: (isSubmitting || isLoadingOrgTypes)
+                    ? null
+                    : handleCreateOrganization,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: theme.colorScheme.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text('Buat Organisasi'),
+                child: Text(isSubmitting ? 'Membuat...' : 'Buat Organisasi'),
               ),
             ),
           ],
@@ -513,9 +686,14 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
             children: [
               const Icon(Icons.check_circle, size: 48, color: Colors.green),
               const SizedBox(height: 12),
-              const Text('Organisasi Berhasil Dibuat!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.green)),
+              const Text('Organisasi Berhasil Dibuat!',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green)),
               const SizedBox(height: 8),
-              Text(organizationNameController.text, style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+              Text(organizationNameController.text,
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600])),
             ],
           ),
         ),
@@ -525,11 +703,13 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
           decoration: BoxDecoration(
             color: theme.colorScheme.primary.withOpacity(0.05),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: theme.colorScheme.primary.withOpacity(0.3), width: 2),
+            border: Border.all(
+                color: theme.colorScheme.primary.withOpacity(0.3), width: 2),
           ),
           child: Column(
             children: [
-              const Text('Kode Organisasi Unik', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              const Text('Kode Organisasi Unik',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -539,11 +719,16 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                       decoration: BoxDecoration(
                         color: theme.scaffoldBackgroundColor,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: theme.colorScheme.primary, width: 2),
+                        border: Border.all(
+                            color: theme.colorScheme.primary, width: 2),
                       ),
                       child: Text(
                         generatedCode,
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: theme.colorScheme.primary),
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'monospace',
+                            color: theme.colorScheme.primary),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -551,7 +736,8 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                   const SizedBox(width: 8),
                   IconButton(
                     onPressed: handleCopyCode,
-                    icon: Icon(copied ? Icons.check : Icons.copy, color: Colors.white),
+                    icon: Icon(copied ? Icons.check : Icons.copy,
+                        color: Colors.white),
                     style: IconButton.styleFrom(
                       backgroundColor: theme.colorScheme.primary,
                       foregroundColor: Colors.white,
@@ -561,7 +747,9 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                 ],
               ),
               const SizedBox(height: 12),
-              Text('Bagikan kode ini kepada anggota yang ingin bergabung', style: TextStyle(fontSize: 12, color: Colors.grey[600]), textAlign: TextAlign.center),
+              Text('Bagikan kode ini kepada anggota yang ingin bergabung',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -581,9 +769,16 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Simpan kode ini dengan aman!', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.orange)),
+                    const Text('Simpan kode ini dengan aman!',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange)),
                     const SizedBox(height: 4),
-                    Text('Kode organisasi dibutuhkan anggota untuk bergabung. Anda bisa melihatnya lagi di menu Settings.', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                    Text(
+                        'Kode organisasi dibutuhkan anggota untuk bergabung. Anda bisa melihatnya lagi di menu Settings.',
+                        style:
+                            TextStyle(fontSize: 11, color: Colors.grey[600])),
                   ],
                 ),
               ),
@@ -601,7 +796,8 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.colorScheme.primary,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
@@ -643,60 +839,85 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                         height: 64,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(12),
-                          gradient: LinearGradient(colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)]),
+                          gradient: LinearGradient(colors: [
+                            theme.colorScheme.primary,
+                            theme.colorScheme.primary.withOpacity(0.8)
+                          ]),
                         ),
-                        child: const Icon(Icons.login, size: 32, color: Colors.white),
+                        child: const Icon(Icons.login,
+                            size: 32, color: Colors.white),
                       ),
                       const SizedBox(height: 16),
-                      const Text('Gabung Organisasi', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                      const Text('Gabung Organisasi',
+                          style: TextStyle(
+                              fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      Text('Masukkan kode yang diberikan oleh Ketua/Admin organisasi', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                      Text(
+                          'Masukkan kode yang diberikan oleh Ketua/Admin organisasi',
+                          style:
+                              TextStyle(fontSize: 14, color: Colors.grey[600])),
                       const SizedBox(height: 32),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.key, size: 16, color: theme.colorScheme.primary),
+                              Icon(Icons.key,
+                                  size: 16, color: theme.colorScheme.primary),
                               const SizedBox(width: 8),
-                              const Text('Kode Organisasi', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                              const Text(' *', style: TextStyle(color: Colors.red)),
+                              const Text('Kode Organisasi',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500)),
+                              const Text(' *',
+                                  style: TextStyle(color: Colors.red)),
                             ],
                           ),
                           const SizedBox(height: 8),
                           TextField(
                             controller: organizationCodeController,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 18, fontFamily: 'monospace', fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.bold),
                             textCapitalization: TextCapitalization.characters,
                             decoration: InputDecoration(
                               hintText: 'HMTI-2026-ABC1',
                               filled: true,
                               fillColor: theme.scaffoldBackgroundColor,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 16),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.dividerColor),
+                                borderSide:
+                                    BorderSide(color: theme.dividerColor),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
+                                borderSide: BorderSide(
+                                    color: theme.dividerColor.withOpacity(0.3)),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+                                borderSide: BorderSide(
+                                    color: theme.colorScheme.primary, width: 2),
                               ),
                             ),
                             onChanged: (value) {
-                              organizationCodeController.value = organizationCodeController.value.copyWith(
+                              organizationCodeController.value =
+                                  organizationCodeController.value.copyWith(
                                 text: value.toUpperCase(),
-                                selection: TextSelection.collapsed(offset: value.length),
+                                selection: TextSelection.collapsed(
+                                    offset: value.length),
                               );
                               setState(() => errorMessage = '');
                             },
                           ),
                           const SizedBox(height: 4),
-                          Text('Format: XXXX-YYYY-ZZZZ (misal: HMTI-2026-ABC1)', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                          Text('Format: XXXX-YYYY-ZZZZ (misal: HMTI-2026-ABC1)',
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey[600])),
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -705,19 +926,30 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                         decoration: BoxDecoration(
                           color: theme.colorScheme.primary.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: theme.colorScheme.primary.withOpacity(0.3)),
+                          border: Border.all(
+                              color:
+                                  theme.colorScheme.primary.withOpacity(0.3)),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.key, size: 20, color: theme.colorScheme.primary),
+                            Icon(Icons.key,
+                                size: 20, color: theme.colorScheme.primary),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Belum punya kode?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: theme.colorScheme.primary)),
+                                  Text('Belum punya kode?',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: theme.colorScheme.primary)),
                                   const SizedBox(height: 4),
-                                  Text('Minta kode organisasi kepada Ketua/Admin yang telah membuat organisasi. Setiap organisasi punya kode unik.', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                                  Text(
+                                      'Minta kode organisasi kepada Ketua/Admin yang telah membuat organisasi. Setiap organisasi punya kode unik.',
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey[600])),
                                 ],
                               ),
                             ),
@@ -731,9 +963,12 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                           decoration: BoxDecoration(
                             color: Colors.red.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.red.withOpacity(0.3)),
+                            border:
+                                Border.all(color: Colors.red.withOpacity(0.3)),
                           ),
-                          child: Text(errorMessage, style: const TextStyle(color: Colors.red, fontSize: 14)),
+                          child: Text(errorMessage,
+                              style: const TextStyle(
+                                  color: Colors.red, fontSize: 14)),
                         ),
                       ],
                       const SizedBox(height: 32),
@@ -743,8 +978,10 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                             child: OutlinedButton(
                               onPressed: () => setState(() => mode = null),
                               style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
                               ),
                               child: const Text('Kembali'),
                             ),
@@ -752,14 +989,21 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: handleJoinOrganization,
+                              onPressed:
+                                  isSubmitting ? null : handleJoinOrganization,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: theme.colorScheme.primary,
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
                               ),
-                              child: const Text('Gabung Organisasi'),
+                              child: Text(
+                                isSubmitting
+                                    ? 'Memproses...'
+                                    : 'Gabung Organisasi',
+                              ),
                             ),
                           ),
                         ],
@@ -790,7 +1034,9 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
           children: [
             Icon(icon, size: 16, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            Text(label,
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
             if (required) const Text(' *', style: TextStyle(color: Colors.red)),
           ],
         ),
@@ -801,24 +1047,28 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
             hintText: hint,
             filled: true,
             fillColor: theme.scaffoldBackgroundColor,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: theme.dividerColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
+              borderSide:
+                  BorderSide(color: theme.dividerColor.withOpacity(0.3)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+              borderSide:
+                  BorderSide(color: theme.colorScheme.primary, width: 2),
             ),
           ),
           onChanged: (_) => setState(() => errorMessage = ''),
         ),
         const SizedBox(height: 4),
-        Text('Nama lengkap organisasi/himpunan Anda', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        Text('Nama lengkap organisasi/himpunan Anda',
+            style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       ],
     );
   }
@@ -839,7 +1089,9 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
           children: [
             Icon(icon, size: 16, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            Text(label,
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
             if (required) const Text(' *', style: TextStyle(color: Colors.red)),
           ],
         ),
@@ -849,22 +1101,27 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
           decoration: InputDecoration(
             filled: true,
             fillColor: theme.scaffoldBackgroundColor,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: theme.dividerColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
+              borderSide:
+                  BorderSide(color: theme.dividerColor.withOpacity(0.3)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+              borderSide:
+                  BorderSide(color: theme.colorScheme.primary, width: 2),
             ),
           ),
           hint: const Text('Pilih Jenis Organisasi'),
-          items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+          items: items
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
           onChanged: onChanged,
         ),
       ],
@@ -892,12 +1149,17 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          theme.colorScheme.secondary.withOpacity(opacity * 0.3),
-                          theme.colorScheme.secondary.withOpacity(opacity * 0.1),
+                          theme.colorScheme.secondary
+                              .withOpacity(opacity * 0.3),
+                          theme.colorScheme.secondary
+                              .withOpacity(opacity * 0.1),
                         ],
                       ),
                     ),
-                  ).animate(onPlay: (controller) => controller.repeat()).blur(begin: const Offset(0, 0), end: const Offset(80, 80), duration: 1.ms),
+                  ).animate(onPlay: (controller) => controller.repeat()).blur(
+                      begin: const Offset(0, 0),
+                      end: const Offset(80, 80),
+                      duration: 1.ms),
                 ),
               );
             },
@@ -924,7 +1186,10 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                         ],
                       ),
                     ),
-                  ).animate(onPlay: (controller) => controller.repeat()).blur(begin: const Offset(0, 0), end: const Offset(80, 80), duration: 1.ms),
+                  ).animate(onPlay: (controller) => controller.repeat()).blur(
+                      begin: const Offset(0, 0),
+                      end: const Offset(80, 80),
+                      duration: 1.ms),
                 ),
               );
             },
@@ -933,8 +1198,10 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
             animation: _orb3Controller,
             builder: (context, child) {
               final rotation = _orb3Controller.value * 2 * math.pi;
-              final scale = 1.0 + (math.sin(_orb3Controller.value * 2 * math.pi) * 0.15);
-              final opacity = 0.2 + (math.sin(_orb3Controller.value * 2 * math.pi) * 0.15);
+              final scale =
+                  1.0 + (math.sin(_orb3Controller.value * 2 * math.pi) * 0.15);
+              final opacity =
+                  0.2 + (math.sin(_orb3Controller.value * 2 * math.pi) * 0.15);
               return Positioned(
                 top: MediaQuery.of(context).size.height * 0.5,
                 left: MediaQuery.of(context).size.width * 0.5,
@@ -951,13 +1218,21 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
                             colors: [
-                              theme.colorScheme.primary.withOpacity(opacity * 0.1),
-                              theme.colorScheme.secondary.withOpacity(opacity * 0.1),
-                              theme.colorScheme.primary.withOpacity(opacity * 0.1),
+                              theme.colorScheme.primary
+                                  .withOpacity(opacity * 0.1),
+                              theme.colorScheme.secondary
+                                  .withOpacity(opacity * 0.1),
+                              theme.colorScheme.primary
+                                  .withOpacity(opacity * 0.1),
                             ],
                           ),
                         ),
-                      ).animate(onPlay: (controller) => controller.repeat()).blur(begin: const Offset(0, 0), end: const Offset(80, 80), duration: 1.ms),
+                      )
+                          .animate(onPlay: (controller) => controller.repeat())
+                          .blur(
+                              begin: const Offset(0, 0),
+                              end: const Offset(80, 80),
+                              duration: 1.ms),
                     ),
                   ),
                 ),
@@ -967,9 +1242,12 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
           AnimatedBuilder(
             animation: _orb4Controller,
             builder: (context, child) {
-              final offsetY = math.sin(_orb4Controller.value * 2 * math.pi) * 30;
-              final offsetX = math.sin(_orb4Controller.value * 2 * math.pi) * 15;
-              final opacity = 0.2 + (math.sin(_orb4Controller.value * 2 * math.pi) * 0.2);
+              final offsetY =
+                  math.sin(_orb4Controller.value * 2 * math.pi) * 30;
+              final offsetX =
+                  math.sin(_orb4Controller.value * 2 * math.pi) * 15;
+              final opacity =
+                  0.2 + (math.sin(_orb4Controller.value * 2 * math.pi) * 0.2);
               return Positioned(
                 top: MediaQuery.of(context).size.height * 0.25 + offsetY,
                 left: 80 + offsetX,
@@ -985,16 +1263,22 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                       ],
                     ),
                   ),
-                ).animate(onPlay: (controller) => controller.repeat()).blur(begin: const Offset(0, 0), end: const Offset(60, 60), duration: 1.ms),
+                ).animate(onPlay: (controller) => controller.repeat()).blur(
+                    begin: const Offset(0, 0),
+                    end: const Offset(60, 60),
+                    duration: 1.ms),
               );
             },
           ),
           AnimatedBuilder(
             animation: _orb5Controller,
             builder: (context, child) {
-              final offsetY = -math.sin(_orb5Controller.value * 2 * math.pi) * 25;
-              final offsetX = -math.sin(_orb5Controller.value * 2 * math.pi) * 12;
-              final opacity = 0.2 + (math.sin(_orb5Controller.value * 2 * math.pi) * 0.15);
+              final offsetY =
+                  -math.sin(_orb5Controller.value * 2 * math.pi) * 25;
+              final offsetX =
+                  -math.sin(_orb5Controller.value * 2 * math.pi) * 12;
+              final opacity =
+                  0.2 + (math.sin(_orb5Controller.value * 2 * math.pi) * 0.15);
               return Positioned(
                 bottom: MediaQuery.of(context).size.height * 0.33 + offsetY,
                 right: 80 + offsetX,
@@ -1010,7 +1294,10 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage> with Ti
                       ],
                     ),
                   ),
-                ).animate(onPlay: (controller) => controller.repeat()).blur(begin: const Offset(0, 0), end: const Offset(60, 60), duration: 1.ms),
+                ).animate(onPlay: (controller) => controller.repeat()).blur(
+                    begin: const Offset(0, 0),
+                    end: const Offset(60, 60),
+                    duration: 1.ms),
               );
             },
           ),

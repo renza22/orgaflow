@@ -67,23 +67,54 @@ class _MemberSetupPageState extends State<MemberSetupPage> {
       return;
     }
 
+    final positionCode = await resolvePositionCode(position);
+    if (positionCode == null) {
+      showMessage('Jabatan tidak ditemukan di master data');
+      return;
+    }
+
     try {
       setState(() {
         isLoading = true;
       });
 
-      final insertedMember = await supabase
-        .from('members')
-        .insert({
-          'profile_id': user.id,
-          'organization_id': selectedOrganizationId,
-          'position': position,
-          'capacity_hours_per_week': capacity,
-          'capacity_used_hours': 0,
-          'status': 'active',
-        })
-        .select()
-        .single();
+      final existingMember = await supabase
+          .from('members')
+          .select('id')
+          .eq('profile_id', user.id)
+          .eq('organization_id', selectedOrganizationId!)
+          .maybeSingle();
+
+      Map<String, dynamic> insertedMember;
+      if (existingMember != null) {
+        insertedMember = await supabase
+            .from('members')
+            .update({
+              'position_code': positionCode,
+              'weekly_capacity_hours': capacity,
+              'availability_status': 'available',
+              'status': 'active',
+            })
+            .eq('id', existingMember['id'])
+            .select()
+            .single();
+      } else {
+        insertedMember = await supabase
+            .from('members')
+            .insert({
+              'profile_id': user.id,
+              'organization_id': selectedOrganizationId,
+              'role': 'member',
+              'position_code': positionCode,
+              'division_code': null,
+              'weekly_capacity_hours': capacity,
+              'capacity_used_hours': 0,
+              'availability_status': 'available',
+              'status': 'active',
+            })
+            .select()
+            .single();
+      }
 
       showMessage('Data anggota berhasil disimpan');
 
@@ -104,6 +135,31 @@ class _MemberSetupPageState extends State<MemberSetupPage> {
         isLoading = false;
       });
     }
+  }
+
+  Future<String?> resolvePositionCode(String input) async {
+    final normalized = input.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final positions = await supabase
+        .from('position_templates')
+        .select('code, label')
+        .eq('is_active', true);
+
+    for (final rawPosition in positions) {
+      final position = rawPosition;
+      final code = (position['code'] as String?) ?? '';
+      final label = (position['label'] as String?) ?? '';
+
+      if (code.toLowerCase() == normalized ||
+          label.toLowerCase() == normalized) {
+        return code;
+      }
+    }
+
+    return null;
   }
 
   void showMessage(String message) {

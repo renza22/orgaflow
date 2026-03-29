@@ -28,10 +28,8 @@ class _SkillSetupPageState extends State<SkillSetupPage> {
 
   Future<void> fetchSkills() async {
     try {
-      final data = await supabase
-          .from('skills')
-          .select()
-          .order('name', ascending: true);
+      final data =
+          await supabase.from('skills').select().order('name', ascending: true);
 
       setState(() {
         skills = data;
@@ -67,10 +65,14 @@ class _SkillSetupPageState extends State<SkillSetupPage> {
           'member_id': widget.memberId,
           'skill_id': skillId,
           'proficiency_level': 3,
+          'source': 'manual',
         };
       }).toList();
 
-      await supabase.from('member_skills').insert(dataToInsert);
+      await supabase.from('member_skills').upsert(
+            dataToInsert,
+            onConflict: 'member_id,skill_id',
+          );
 
       showMessage('Skill berhasil disimpan');
 
@@ -131,8 +133,8 @@ class _SkillSetupPageState extends State<SkillSetupPage> {
                         return CheckboxListTile(
                           value: isSelected,
                           title: Text(skill['name']),
-                          subtitle: skill['category'] != null
-                              ? Text(skill['category'])
+                          subtitle: skill['category_code'] != null
+                              ? Text(skill['category_code'])
                               : null,
                           onChanged: (_) => toggleSkill(skillId),
                         );

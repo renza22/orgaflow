@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../../core/supabase_config.dart';
+
+import '../../domain/models/workload_item_model.dart';
+import '../presenters/workload_dashboard_presenter.dart';
 
 class WorkloadDashboardPage extends StatefulWidget {
   const WorkloadDashboardPage({super.key});
@@ -9,7 +11,9 @@ class WorkloadDashboardPage extends StatefulWidget {
 }
 
 class _WorkloadDashboardPageState extends State<WorkloadDashboardPage> {
-  List<Map<String, dynamic>> workloadData = [];
+  final WorkloadDashboardPresenter _presenter = WorkloadDashboardPresenter();
+
+  List<WorkloadItemModel> workloadData = [];
   bool isLoading = true;
 
   @override
@@ -18,115 +22,34 @@ class _WorkloadDashboardPageState extends State<WorkloadDashboardPage> {
     fetchWorkloadData();
   }
 
-Future<void> fetchWorkloadData() async {
-  try {
-    final user = supabase.auth.currentUser;
+  Future<void> fetchWorkloadData() async {
+    final result = await _presenter.loadWorkload();
 
-    if (user == null) {
-      showMessage('User belum login');
-      setState(() {
-        isLoading = false;
-      });
+    if (!mounted) {
       return;
     }
 
-    // Cari member milik user login
-    final currentMemberList = await supabase
-        .from('members')
-        .select()
-        .eq('profile_id', user.id);
-
-    if (currentMemberList.isEmpty) {
-      showMessage(
-        'User ini belum punya data keanggotaan di tabel members. '
-        'Coba login dengan akun yang sudah melewati setup member.',
-      );
+    if (result.isFailure) {
       setState(() {
         isLoading = false;
       });
+      showMessage(result.error!.message);
       return;
     }
 
-    final currentMember = currentMemberList.first;
-    final organizationId = currentMember['organization_id'];
-
-    // Ambil semua member dalam organisasi
-    final members = await supabase
-        .from('members')
-        .select()
-        .eq('organization_id', organizationId);
-
-    List<Map<String, dynamic>> results = [];
-
-    for (final member in members) {
-      final profileList = await supabase
-          .from('profiles')
-          .select()
-          .eq('id', member['profile_id']);
-
-      final profile = profileList.isNotEmpty ? profileList.first : null;
-
-      final assignments = await supabase
-          .from('task_assignments')
-          .select('task_id, tasks(estimated_hours, title)')
-          .eq('member_id', member['id']);
-
-      int totalWorkload = 0;
-
-      for (final assignment in assignments) {
-        final task = assignment['tasks'];
-        if (task != null && task['estimated_hours'] != null) {
-          totalWorkload += (task['estimated_hours'] as num).toInt();
-        }
-      }
-
-      final int capacity =
-          ((member['capacity_hours_per_week'] ?? 0) as num).toInt();
-
-      final double loadRatio =
-          capacity > 0 ? totalWorkload / capacity : 0.0;
-
-      String status;
-      if (capacity == 0) {
-        status = 'No Capacity';
-      } else if (loadRatio > 1.0) {
-        status = 'Overload';
-      } else if (loadRatio >= 0.8) {
-        status = 'Warning';
-      } else {
-        status = 'Aman';
-      }
-
-      results.add({
-        'member_id': member['id'],
-        'full_name': profile?['full_name'] ?? 'Tanpa Nama',
-        'position': member['position'] ?? '-',
-        'capacity': capacity,
-        'workload': totalWorkload,
-        'load_ratio': loadRatio,
-        'status': status,
-      });
-    }
-
     setState(() {
-      workloadData = results;
+      workloadData = result.data!;
       isLoading = false;
     });
-  } catch (e) {
-    setState(() {
-      isLoading = false;
-    });
-    showMessage('Gagal mengambil workload: $e');
   }
-}
 
   Color statusColor(String status) {
     switch (status) {
-      case 'Overload':
+      case 'overload':
         return Colors.red;
-      case 'Warning':
+      case 'warning':
         return Colors.orange;
-      case 'Aman':
+      case 'safe':
         return Colors.green;
       default:
         return Colors.grey;
@@ -141,6 +64,21 @@ Future<void> fetchWorkloadData() async {
 
   String formatPercent(double ratio) {
     return '${(ratio * 100).toStringAsFixed(0)}%';
+  }
+
+  String formatStatus(String status) {
+    switch (status) {
+      case 'overload':
+        return 'Overload';
+      case 'warning':
+        return 'Warning';
+      case 'safe':
+        return 'Aman';
+      case 'no_capacity':
+        return 'No Capacity';
+      default:
+        return status;
+    }
   }
 
   @override
@@ -169,17 +107,23 @@ Future<void> fetchWorkloadData() async {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              item['full_name'],
+                              item.fullName,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(height: 4),
-                            Text('Jabatan: ${item['position']}'),
-                            Text('Capacity: ${item['capacity']} jam/minggu'),
-                            Text('Workload: ${item['workload']} jam'),
-                            Text('Load Ratio: ${formatPercent(item['load_ratio'])}'),
+                            Text(
+                              'Jabatan: ${item.positionLabel ?? item.positionCode ?? '-'}',
+                            ),
+                            Text(
+                              'Capacity: ${item.weeklyCapacityHours} jam/minggu',
+                            ),
+                            Text('Workload: ${item.assignedHours} jam'),
+                            Text(
+                              'Load Ratio: ${formatPercent(item.loadRatio)}',
+                            ),
                             const SizedBox(height: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -187,11 +131,11 @@ Future<void> fetchWorkloadData() async {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: statusColor(item['status']),
+                                color: statusColor(item.workloadStatus),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                item['status'],
+                                formatStatus(item.workloadStatus),
                                 style: const TextStyle(color: Colors.white),
                               ),
                             ),

@@ -3,6 +3,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../domain/models/register_input.dart';
+import '../presenters/register_presenter.dart';
+
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
@@ -10,11 +13,13 @@ class RegisterPage extends StatefulWidget {
   State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMixin {
+class _RegisterPageState extends State<RegisterPage>
+    with TickerProviderStateMixin {
   final fullNameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
+  RegisterPresenter? _presenter;
 
   bool showPassword = false;
   bool showConfirmPassword = false;
@@ -34,22 +39,22 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
       vsync: this,
       duration: const Duration(seconds: 9),
     )..repeat(reverse: true);
-    
+
     _orb2Controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 11),
     )..repeat(reverse: true);
-    
+
     _orb3Controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 25),
     )..repeat();
-    
+
     _orb4Controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 8),
     )..repeat(reverse: true);
-    
+
     _orb5Controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
@@ -72,13 +77,15 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
 
   Map<String, dynamic> getPasswordStrength() {
     final password = passwordController.text;
-    if (password.isEmpty) return {'strength': 0, 'label': '', 'color': Colors.grey};
-    
+    if (password.isEmpty) {
+      return {'strength': 0, 'label': '', 'color': Colors.grey};
+    }
+
     final hasMinLength = password.length >= 8;
     final hasLetter = RegExp(r'[a-zA-Z]').hasMatch(password);
     final hasNumber = RegExp(r'[0-9]').hasMatch(password);
     final hasSpecial = RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password);
-    
+
     if (!hasMinLength) {
       return {'strength': 1, 'label': 'Lemah', 'color': Colors.red};
     }
@@ -97,7 +104,6 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
         passwordController.text == confirmPasswordController.text;
   }
 
-
   Future<void> handleSubmit() async {
     if (fullNameController.text.trim().isEmpty ||
         emailController.text.trim().isEmpty ||
@@ -107,9 +113,12 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
       return;
     }
 
-    final passwordStrength = getPasswordStrength();
-    if (passwordStrength['strength'] < 1) {
-      showMessage('Password harus minimal 8 karakter dengan kombinasi huruf dan angka!');
+    if (passwordController.text.trim().length < 8 ||
+        !RegExp(r'[a-zA-Z]').hasMatch(passwordController.text.trim()) ||
+        !RegExp(r'[0-9]').hasMatch(passwordController.text.trim())) {
+      showMessage(
+        'Password harus minimal 8 karakter dengan kombinasi huruf dan angka!',
+      );
       return;
     }
 
@@ -124,13 +133,32 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
     }
 
     setState(() => isLoading = true);
-    await Future.delayed(const Duration(seconds: 2));
+
+    final result = await (_presenter ??= RegisterPresenter()).register(
+      RegisterInput(
+        fullName: fullNameController.text.trim(),
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
     setState(() => isLoading = false);
-    
-    if (!mounted) return;
-    
-    // Navigate to organization choice page
-    Navigator.pushReplacementNamed(context, '/organization');
+
+    if (result.isFailure) {
+      showMessage(result.error!.message);
+      return;
+    }
+
+    final registerResult = result.data!;
+    showMessage(registerResult.message ?? 'Akun berhasil dibuat');
+
+    if (registerResult.hasSession) {
+      Navigator.pushReplacementNamed(context, '/organization');
+    }
   }
 
   void showMessage(String message) {
@@ -213,8 +241,10 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
                         ],
                       ),
                     ),
-                  ).animate(onPlay: (controller) => controller.repeat())
-                      .blur(begin: const Offset(0, 0), end: const Offset(80, 80), duration: 1.ms),
+                  ).animate(onPlay: (controller) => controller.repeat()).blur(
+                      begin: const Offset(0, 0),
+                      end: const Offset(80, 80),
+                      duration: 1.ms),
                 ),
               );
             },
@@ -241,8 +271,10 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
                         ],
                       ),
                     ),
-                  ).animate(onPlay: (controller) => controller.repeat())
-                      .blur(begin: const Offset(0, 0), end: const Offset(80, 80), duration: 1.ms),
+                  ).animate(onPlay: (controller) => controller.repeat()).blur(
+                      begin: const Offset(0, 0),
+                      end: const Offset(80, 80),
+                      duration: 1.ms),
                 ),
               );
             },
@@ -251,8 +283,10 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
             animation: _orb3Controller,
             builder: (context, child) {
               final rotation = _orb3Controller.value * 2 * math.pi;
-              final scale = 1.0 + (math.sin(_orb3Controller.value * 2 * math.pi) * 0.15);
-              final opacity = 0.2 + (math.sin(_orb3Controller.value * 2 * math.pi) * 0.15);
+              final scale =
+                  1.0 + (math.sin(_orb3Controller.value * 2 * math.pi) * 0.15);
+              final opacity =
+                  0.2 + (math.sin(_orb3Controller.value * 2 * math.pi) * 0.15);
               return Positioned(
                 top: MediaQuery.of(context).size.height * 0.5,
                 left: MediaQuery.of(context).size.width * 0.5,
@@ -275,8 +309,12 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
                             ],
                           ),
                         ),
-                      ).animate(onPlay: (controller) => controller.repeat())
-                          .blur(begin: const Offset(0, 0), end: const Offset(80, 80), duration: 1.ms),
+                      )
+                          .animate(onPlay: (controller) => controller.repeat())
+                          .blur(
+                              begin: const Offset(0, 0),
+                              end: const Offset(80, 80),
+                              duration: 1.ms),
                     ),
                   ),
                 ),
@@ -286,9 +324,12 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
           AnimatedBuilder(
             animation: _orb4Controller,
             builder: (context, child) {
-              final offsetY = math.sin(_orb4Controller.value * 2 * math.pi) * 30;
-              final offsetX = math.sin(_orb4Controller.value * 2 * math.pi) * 15;
-              final opacity = 0.2 + (math.sin(_orb4Controller.value * 2 * math.pi) * 0.2);
+              final offsetY =
+                  math.sin(_orb4Controller.value * 2 * math.pi) * 30;
+              final offsetX =
+                  math.sin(_orb4Controller.value * 2 * math.pi) * 15;
+              final opacity =
+                  0.2 + (math.sin(_orb4Controller.value * 2 * math.pi) * 0.2);
               return Positioned(
                 top: MediaQuery.of(context).size.height * 0.25 + offsetY,
                 left: 80 + offsetX,
@@ -304,17 +345,22 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
                       ],
                     ),
                   ),
-                ).animate(onPlay: (controller) => controller.repeat())
-                    .blur(begin: const Offset(0, 0), end: const Offset(60, 60), duration: 1.ms),
+                ).animate(onPlay: (controller) => controller.repeat()).blur(
+                    begin: const Offset(0, 0),
+                    end: const Offset(60, 60),
+                    duration: 1.ms),
               );
             },
           ),
           AnimatedBuilder(
             animation: _orb5Controller,
             builder: (context, child) {
-              final offsetY = -math.sin(_orb5Controller.value * 2 * math.pi) * 25;
-              final offsetX = -math.sin(_orb5Controller.value * 2 * math.pi) * 12;
-              final opacity = 0.2 + (math.sin(_orb5Controller.value * 2 * math.pi) * 0.15);
+              final offsetY =
+                  -math.sin(_orb5Controller.value * 2 * math.pi) * 25;
+              final offsetX =
+                  -math.sin(_orb5Controller.value * 2 * math.pi) * 12;
+              final opacity =
+                  0.2 + (math.sin(_orb5Controller.value * 2 * math.pi) * 0.15);
               return Positioned(
                 bottom: MediaQuery.of(context).size.height * 0.33 + offsetY,
                 right: 80 + offsetX,
@@ -330,8 +376,10 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
                       ],
                     ),
                   ),
-                ).animate(onPlay: (controller) => controller.repeat())
-                    .blur(begin: const Offset(0, 0), end: const Offset(60, 60), duration: 1.ms),
+                ).animate(onPlay: (controller) => controller.repeat()).blur(
+                    begin: const Offset(0, 0),
+                    end: const Offset(60, 60),
+                    duration: 1.ms),
               );
             },
           ),
@@ -339,7 +387,6 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
       ),
     );
   }
-
 
   Widget _buildHeader(Color primaryColor, Color secondaryColor) {
     return Column(
@@ -408,7 +455,6 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
     );
   }
 
-
   Widget _buildRegisterCard(ThemeData theme) {
     return Container(
       decoration: BoxDecoration(
@@ -465,12 +511,9 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
           ),
         ),
       ),
-    )
-        .animate()
-        .fadeIn(duration: 600.ms, delay: 300.ms)
-        .scale(begin: const Offset(0.95, 0.95), delay: 300.ms, duration: 600.ms);
+    ).animate().fadeIn(duration: 600.ms, delay: 300.ms).scale(
+        begin: const Offset(0.95, 0.95), delay: 300.ms, duration: 600.ms);
   }
-
 
   Widget _buildTextField({
     required TextEditingController controller,
@@ -504,18 +547,21 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
             hintText: hint,
             filled: true,
             fillColor: theme.inputDecorationTheme.fillColor ?? theme.cardColor,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: theme.dividerColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
+              borderSide:
+                  BorderSide(color: theme.dividerColor.withOpacity(0.3)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+              borderSide:
+                  BorderSide(color: theme.colorScheme.primary, width: 2),
             ),
           ),
         ),
@@ -528,13 +574,14 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
 
   Widget _buildPasswordFieldWithStrength(ThemeData theme) {
     final passwordStrength = getPasswordStrength();
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(Icons.lock_outline, size: 16, color: theme.colorScheme.primary),
+            Icon(Icons.lock_outline,
+                size: 16, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text(
               'Password',
@@ -555,7 +602,8 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
             hintText: '••••••••',
             filled: true,
             fillColor: theme.inputDecorationTheme.fillColor ?? theme.cardColor,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             suffixIcon: IconButton(
               icon: Icon(
                 showPassword ? Icons.visibility_off : Icons.visibility,
@@ -569,11 +617,13 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
+              borderSide:
+                  BorderSide(color: theme.dividerColor.withOpacity(0.3)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+              borderSide:
+                  BorderSide(color: theme.colorScheme.primary, width: 2),
             ),
           ),
         ),
@@ -623,7 +673,9 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
             'Password strength: ${passwordStrength['label']}',
             style: TextStyle(
               fontSize: 12,
-              color: passwordStrength['strength'] >= 2 ? Colors.green : Colors.orange,
+              color: passwordStrength['strength'] >= 2
+                  ? Colors.green
+                  : Colors.orange,
             ),
           ),
         ],
@@ -634,14 +686,14 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
         .slideX(begin: -0.2, end: 0, duration: 500.ms, delay: 550.ms);
   }
 
-
   Widget _buildConfirmPasswordField(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(Icons.lock_outline, size: 16, color: theme.colorScheme.primary),
+            Icon(Icons.lock_outline,
+                size: 16, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text(
               'Confirm Password',
@@ -662,13 +714,15 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
             hintText: '••••••••',
             filled: true,
             fillColor: theme.inputDecorationTheme.fillColor ?? theme.cardColor,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             suffixIcon: IconButton(
               icon: Icon(
                 showConfirmPassword ? Icons.visibility_off : Icons.visibility,
                 color: theme.colorScheme.primary.withOpacity(0.6),
               ),
-              onPressed: () => setState(() => showConfirmPassword = !showConfirmPassword),
+              onPressed: () =>
+                  setState(() => showConfirmPassword = !showConfirmPassword),
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -676,15 +730,18 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
+              borderSide:
+                  BorderSide(color: theme.dividerColor.withOpacity(0.3)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+              borderSide:
+                  BorderSide(color: theme.colorScheme.primary, width: 2),
             ),
           ),
         ),
-        if (confirmPasswordController.text.isNotEmpty && passwordController.text.isNotEmpty) ...[
+        if (confirmPasswordController.text.isNotEmpty &&
+            passwordController.text.isNotEmpty) ...[
           const SizedBox(height: 8),
           Row(
             children: [
@@ -710,7 +767,6 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
         .fadeIn(duration: 500.ms, delay: 600.ms)
         .slideX(begin: -0.2, end: 0, duration: 500.ms, delay: 600.ms);
   }
-
 
   Widget _buildTermsCheckbox(ThemeData theme) {
     return Row(
@@ -776,9 +832,7 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
           ),
         ),
       ],
-    )
-        .animate()
-        .fadeIn(duration: 500.ms, delay: 700.ms);
+    ).animate().fadeIn(duration: 500.ms, delay: 700.ms);
   }
 
   Widget _buildSubmitButton(ThemeData theme) {
@@ -846,8 +900,6 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
           ),
         ),
       ],
-    )
-        .animate()
-        .fadeIn(duration: 500.ms, delay: 900.ms);
+    ).animate().fadeIn(duration: 500.ms, delay: 900.ms);
   }
 }

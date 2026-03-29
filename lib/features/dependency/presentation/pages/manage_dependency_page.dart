@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
-import '../../../../core/supabase_config.dart';
+
+import '../../../task/domain/models/task_model.dart';
+import '../../domain/models/task_dependency_model.dart';
+import '../presenters/manage_dependency_presenter.dart';
 
 class ManageDependencyPage extends StatefulWidget {
-  final String taskId;
-  final String projectId;
-
   const ManageDependencyPage({
     super.key,
     required this.taskId,
     required this.projectId,
   });
 
+  final String taskId;
+  final String projectId;
+
   @override
   State<ManageDependencyPage> createState() => _ManageDependencyPageState();
 }
 
 class _ManageDependencyPageState extends State<ManageDependencyPage> {
-  List tasks = [];
-  List dependencies = [];
+  final ManageDependencyPresenter _presenter = ManageDependencyPresenter();
+
+  List<TaskModel> tasks = [];
+  List<TaskDependencyModel> dependencies = [];
   String? selectedDependsOnTaskId;
   bool isLoading = true;
   bool isSaving = false;
@@ -29,30 +34,28 @@ class _ManageDependencyPageState extends State<ManageDependencyPage> {
   }
 
   Future<void> fetchData() async {
-    try {
-      final allTasks = await supabase
-          .from('tasks')
-          .select()
-          .eq('project_id', widget.projectId)
-          .neq('id', widget.taskId)
-          .order('created_at', ascending: false);
+    final result = await _presenter.loadData(
+      taskId: widget.taskId,
+      projectId: widget.projectId,
+    );
 
-      final currentDependencies = await supabase
-          .from('task_dependencies')
-          .select('id, depends_on_task_id, tasks!task_dependencies_depends_on_task_id_fkey(title)')
-          .eq('task_id', widget.taskId);
-
-      setState(() {
-        tasks = allTasks;
-        dependencies = currentDependencies;
-        isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
-      showMessage('Gagal mengambil dependency: $e');
+    if (!mounted) {
+      return;
     }
+
+    if (result.isFailure) {
+      setState(() {
+        isLoading = false;
+      });
+      showMessage(result.error!.message);
+      return;
+    }
+
+    setState(() {
+      tasks = result.data!.tasks;
+      dependencies = result.data!.dependencies;
+      isLoading = false;
+    });
   }
 
   Future<void> addDependency() async {
@@ -61,40 +64,43 @@ class _ManageDependencyPageState extends State<ManageDependencyPage> {
       return;
     }
 
-    try {
-      setState(() {
-        isSaving = true;
-      });
+    setState(() {
+      isSaving = true;
+    });
 
-      await supabase.from('task_dependencies').insert({
-        'task_id': widget.taskId,
-        'depends_on_task_id': selectedDependsOnTaskId,
-      });
+    final result = await _presenter.addDependency(
+      taskId: widget.taskId,
+      dependsOnTaskId: selectedDependsOnTaskId!,
+    );
 
-      showMessage('Dependency berhasil ditambahkan');
-      selectedDependsOnTaskId = null;
-      await fetchData();
-    } catch (e) {
-      showMessage('Gagal menambahkan dependency: $e');
-    } finally {
-      setState(() {
-        isSaving = false;
-      });
+    if (!mounted) {
+      return;
     }
+
+    setState(() {
+      isSaving = false;
+    });
+
+    if (result.isFailure) {
+      showMessage(result.error!.message);
+      return;
+    }
+
+    showMessage('Dependency berhasil ditambahkan');
+    selectedDependsOnTaskId = null;
+    await fetchData();
   }
 
   Future<void> deleteDependency(String dependencyId) async {
-    try {
-      await supabase
-          .from('task_dependencies')
-          .delete()
-          .eq('id', dependencyId);
+    final result = await _presenter.deleteDependency(dependencyId);
 
-      showMessage('Dependency berhasil dihapus');
-      await fetchData();
-    } catch (e) {
-      showMessage('Gagal menghapus dependency: $e');
+    if (result.isFailure) {
+      showMessage(result.error!.message);
+      return;
     }
+
+    showMessage('Dependency berhasil dihapus');
+    await fetchData();
   }
 
   void showMessage(String message) {
@@ -120,8 +126,8 @@ class _ManageDependencyPageState extends State<ManageDependencyPage> {
                     initialValue: selectedDependsOnTaskId,
                     items: tasks.map<DropdownMenuItem<String>>((task) {
                       return DropdownMenuItem<String>(
-                        value: task['id'],
-                        child: Text(task['title']),
+                        value: task.id,
+                        child: Text(task.title),
                       );
                     }).toList(),
                     onChanged: (value) {
@@ -162,17 +168,13 @@ class _ManageDependencyPageState extends State<ManageDependencyPage> {
                             itemCount: dependencies.length,
                             itemBuilder: (context, index) {
                               final dependency = dependencies[index];
-                              final dependsOnTask =
-                                  dependency['tasks'];
 
                               return Card(
                                 child: ListTile(
-                                  title: Text(
-                                    dependsOnTask?['title'] ?? 'Task tidak ditemukan',
-                                  ),
+                                  title: Text(dependency.dependsOnTaskTitle),
                                   trailing: IconButton(
                                     onPressed: () {
-                                      deleteDependency(dependency['id']);
+                                      deleteDependency(dependency.id);
                                     },
                                     icon: const Icon(Icons.delete),
                                   ),

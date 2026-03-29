@@ -2,11 +2,10 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../../core/supabase_config.dart';
-import '../../../profile/presentation/pages/profile_page.dart';
+import '../../../../core/session/session_context.dart';
 import 'register_page.dart';
+import '../presenters/auth_presenter.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -18,6 +17,7 @@ class AuthPage extends StatefulWidget {
 class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  AuthPresenter? _presenter;
 
   bool showPassword = false;
   bool rememberMe = false;
@@ -36,22 +36,22 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(seconds: 8),
     )..repeat(reverse: true);
-    
+
     _orb2Controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat(reverse: true);
-    
+
     _orb3Controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
-    
+
     _orb4Controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 9),
     )..repeat(reverse: true);
-    
+
     _orb5Controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 11),
@@ -84,27 +84,26 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
         isLoading = true;
       });
 
-      await Future.delayed(const Duration(milliseconds: 1500));
-
-      await supabase.auth.signInWithPassword(
+      final result = await (_presenter ??= AuthPresenter()).signIn(
         email: identifier,
         password: password,
       );
 
       if (!mounted) return;
 
+      if (result.isFailure) {
+        showMessage(result.error!.message);
+        return;
+      }
+
       showMessage('Login berhasil');
 
-      Navigator.pushReplacement(
+      Navigator.pushReplacementNamed(
         context,
-        MaterialPageRoute(
-          builder: (_) => const ProfilePage(),
-        ),
+        result.data?.routeName ?? AppRouteTarget.dashboard.routeName,
       );
-    } on AuthException catch (e) {
-      showMessage(e.message);
-    } catch (e) {
-      showMessage('Terjadi error: $e');
+    } catch (_) {
+      showMessage('Terjadi kesalahan saat login.');
     } finally {
       if (mounted) {
         setState(() {
@@ -143,7 +142,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
           children: [
             // Animated background orbs
             _buildAnimatedOrbs(primaryColor, secondaryColor),
-            
+
             // Main content
             SafeArea(
               child: Center(
@@ -198,13 +197,15 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                         ],
                       ),
                     ),
-                  ).animate(onPlay: (controller) => controller.repeat())
-                      .blur(begin: const Offset(0, 0), end: const Offset(80, 80), duration: 1.ms),
+                  ).animate(onPlay: (controller) => controller.repeat()).blur(
+                      begin: const Offset(0, 0),
+                      end: const Offset(80, 80),
+                      duration: 1.ms),
                 ),
               );
             },
           ),
-          
+
           // Orb 2 - Top right, medium
           AnimatedBuilder(
             animation: _orb2Controller,
@@ -228,13 +229,15 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                         ],
                       ),
                     ),
-                  ).animate(onPlay: (controller) => controller.repeat())
-                      .blur(begin: const Offset(0, 0), end: const Offset(60, 60), duration: 1.ms),
+                  ).animate(onPlay: (controller) => controller.repeat()).blur(
+                      begin: const Offset(0, 0),
+                      end: const Offset(60, 60),
+                      duration: 1.ms),
                 ),
               );
             },
           ),
-          
+
           // Orb 3 - Bottom left, small
           AnimatedBuilder(
             animation: _orb3Controller,
@@ -261,14 +264,16 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                           ],
                         ),
                       ),
-                    ).animate(onPlay: (controller) => controller.repeat())
-                        .blur(begin: const Offset(0, 0), end: const Offset(50, 50), duration: 1.ms),
+                    ).animate(onPlay: (controller) => controller.repeat()).blur(
+                        begin: const Offset(0, 0),
+                        end: const Offset(50, 50),
+                        duration: 1.ms),
                   ),
                 ),
               );
             },
           ),
-          
+
           // Orb 4 - Bottom right, medium
           AnimatedBuilder(
             animation: _orb4Controller,
@@ -292,13 +297,15 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                         ],
                       ),
                     ),
-                  ).animate(onPlay: (controller) => controller.repeat())
-                      .blur(begin: const Offset(0, 0), end: const Offset(70, 70), duration: 1.ms),
+                  ).animate(onPlay: (controller) => controller.repeat()).blur(
+                      begin: const Offset(0, 0),
+                      end: const Offset(70, 70),
+                      duration: 1.ms),
                 ),
               );
             },
           ),
-          
+
           // Orb 5 - Center floating, small
           AnimatedBuilder(
             animation: _orb5Controller,
@@ -323,8 +330,10 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                         ],
                       ),
                     ),
-                  ).animate(onPlay: (controller) => controller.repeat())
-                      .blur(begin: const Offset(0, 0), end: const Offset(45, 45), duration: 1.ms),
+                  ).animate(onPlay: (controller) => controller.repeat()).blur(
+                      begin: const Offset(0, 0),
+                      end: const Offset(45, 45),
+                      duration: 1.ms),
                 ),
               );
             },
@@ -363,9 +372,9 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
             .fadeIn(duration: 600.ms, delay: 200.ms)
             .slideY(begin: -0.2, end: 0, duration: 600.ms, delay: 200.ms)
             .scale(begin: const Offset(0.8, 0.8), delay: 200.ms),
-        
+
         const SizedBox(height: 16),
-        
+
         // Title with gradient
         ShaderMask(
           shaderCallback: (bounds) => LinearGradient(
@@ -384,9 +393,9 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
             .animate()
             .fadeIn(duration: 600.ms, delay: 200.ms)
             .slideY(begin: -0.2, end: 0, duration: 600.ms, delay: 200.ms),
-        
+
         const SizedBox(height: 8),
-        
+
         Text(
           'Yuk, buat distribusi kerja ormawamu jadi lebih adil.',
           style: TextStyle(
@@ -440,10 +449,8 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
           ),
         ),
       ),
-    )
-        .animate()
-        .fadeIn(duration: 600.ms, delay: 300.ms)
-        .scale(begin: const Offset(0.95, 0.95), delay: 300.ms, duration: 600.ms);
+    ).animate().fadeIn(duration: 600.ms, delay: 300.ms).scale(
+        begin: const Offset(0.95, 0.95), delay: 300.ms, duration: 600.ms);
   }
 
   Widget _buildIdentifierField(ThemeData theme) {
@@ -524,7 +531,8 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                 height: 24,
                 child: Checkbox(
                   value: rememberMe,
-                  onChanged: (value) => setState(() => rememberMe = value ?? false),
+                  onChanged: (value) =>
+                      setState(() => rememberMe = value ?? false),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
                   ),

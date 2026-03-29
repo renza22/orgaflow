@@ -1,24 +1,27 @@
 import 'package:flutter/material.dart';
-import '../../../../core/supabase_config.dart';
+
+import '../../domain/models/assignment_member_option.dart';
+import '../presenters/assign_task_presenter.dart';
 
 class AssignTaskPage extends StatefulWidget {
-
-  final String taskId;
-
   const AssignTaskPage({
     super.key,
     required this.taskId,
   });
+
+  final String taskId;
 
   @override
   State<AssignTaskPage> createState() => _AssignTaskPageState();
 }
 
 class _AssignTaskPageState extends State<AssignTaskPage> {
+  final AssignTaskPresenter _presenter = AssignTaskPresenter();
 
-  List members = [];
+  List<AssignmentMemberOption> members = [];
   String? selectedMemberId;
   bool isLoading = true;
+  bool isSubmitting = false;
 
   @override
   void initState() {
@@ -27,64 +30,56 @@ class _AssignTaskPageState extends State<AssignTaskPage> {
   }
 
   Future<void> fetchMembers() async {
+    final result = await _presenter.loadMembers();
 
-    try {
-
-      final user = supabase.auth.currentUser;
-
-      if (user == null) return;
-
-      final member = await supabase
-          .from('members')
-          .select()
-          .eq('profile_id', user.id)
-          .single();
-
-      final organizationId = member['organization_id'];
-
-      final data = await supabase
-          .from('members')
-          .select('id, position')
-          .eq('organization_id', organizationId);
-
-      setState(() {
-        members = data;
-        isLoading = false;
-      });
-
-    } catch (e) {
-
-      setState(() {
-        isLoading = false;
-      });
-
-      showMessage('Gagal mengambil members: $e');
+    if (!mounted) {
+      return;
     }
+
+    if (result.isFailure) {
+      setState(() {
+        isLoading = false;
+      });
+      showMessage(result.error!.message);
+      return;
+    }
+
+    setState(() {
+      members = result.data!;
+      isLoading = false;
+    });
   }
 
   Future<void> assignTask() async {
-
     if (selectedMemberId == null) {
       showMessage('Pilih member terlebih dahulu');
       return;
     }
 
-    try {
+    setState(() {
+      isSubmitting = true;
+    });
 
-      await supabase.from('task_assignments').insert({
-        'task_id': widget.taskId,
-        'member_id': selectedMemberId
-      });
+    final result = await _presenter.assignTask(
+      taskId: widget.taskId,
+      memberId: selectedMemberId!,
+    );
 
-      showMessage('Task berhasil di-assign');
-
-      Navigator.pop(context);
-
-    } catch (e) {
-
-      showMessage('Gagal assign task: $e');
-
+    if (!mounted) {
+      return;
     }
+
+    setState(() {
+      isSubmitting = false;
+    });
+
+    if (result.isFailure) {
+      showMessage(result.error!.message);
+      return;
+    }
+
+    showMessage('Task berhasil di-assign');
+    Navigator.pop(context);
   }
 
   void showMessage(String message) {
@@ -94,30 +89,23 @@ class _AssignTaskPageState extends State<AssignTaskPage> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-
       appBar: AppBar(
         title: const Text('Assign Task'),
       ),
-
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
-
                 children: [
-
                   DropdownButtonFormField<String>(
                     initialValue: selectedMemberId,
                     items: members.map<DropdownMenuItem<String>>((member) {
-
                       return DropdownMenuItem<String>(
-                        value: member['id'],
-                        child: Text(member['position']),
+                        value: member.id,
+                        child: Text(member.displayLabel),
                       );
-
                     }).toList(),
                     onChanged: (value) {
                       setState(() {
@@ -129,17 +117,16 @@ class _AssignTaskPageState extends State<AssignTaskPage> {
                       border: OutlineInputBorder(),
                     ),
                   ),
-
                   const SizedBox(height: 20),
-
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: assignTask,
-                      child: const Text('Assign Task'),
+                      onPressed: isSubmitting ? null : assignTask,
+                      child: Text(
+                        isSubmitting ? 'Menyimpan...' : 'Assign Task',
+                      ),
                     ),
-                  )
-
+                  ),
                 ],
               ),
             ),

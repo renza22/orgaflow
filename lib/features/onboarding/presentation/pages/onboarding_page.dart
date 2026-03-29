@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
+
+import '../../../../core/utils/message_helper.dart';
+import '../../domain/models/onboarding_initial_data.dart';
+import '../../domain/models/portfolio_link_input.dart';
 import '../../models/skill_data.dart';
-import '../../data/onboarding_data.dart';
+import '../presenters/onboarding_presenter.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -15,6 +18,7 @@ class OnboardingPage extends StatefulWidget {
 class _OnboardingPageState extends State<OnboardingPage> {
   int currentStep = 0;
   final PageController _pageController = PageController();
+  final OnboardingPresenter _presenter = OnboardingPresenter();
 
   // Step 1: Data Identitas
   File? profileImage;
@@ -34,6 +38,21 @@ class _OnboardingPageState extends State<OnboardingPage> {
   // Step 4: Portfolio & Bio
   List<PortfolioLink> portfolioLinks = [];
   final bioController = TextEditingController();
+  OnboardingInitialData? _initialData;
+  bool isLoadingInitialData = true;
+  bool isSubmitting = false;
+  String? loadError;
+
+  bool get isOwnerLocked {
+    final initialData = _initialData;
+    return initialData != null && _presenter.isOwnerLocked(initialData);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
 
   @override
   void dispose() {
@@ -54,28 +73,159 @@ class _OnboardingPageState extends State<OnboardingPage> {
       setState(() => profileImage = File(pickedFile.path));
     }
   }
+
+  Future<void> _loadInitialData() async {
+    final result = await _presenter.loadInitialData();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result.isFailure) {
+      setState(() {
+        isLoadingInitialData = false;
+        loadError = result.error!.message;
+      });
+      MessageHelper.showSnackBar(context, result.error!.message);
+      return;
+    }
+
+    final initialData = result.data!;
+    _applyInitialData(initialData);
+
+    setState(() {
+      _initialData = initialData;
+      isLoadingInitialData = false;
+      loadError = null;
+    });
+  }
+
+  void _applyInitialData(OnboardingInitialData initialData) {
+    namaLengkapController.text = initialData.profile?.fullName ?? '';
+    nimController.text = initialData.profile?.nim ?? '';
+    bioController.text = initialData.profile?.bio ?? '';
+    selectedProdi = _presenter.labelForCode(
+      initialData.masterData.studyPrograms,
+      initialData.profile?.studyProgramCode,
+    );
+    selectedJabatan = _presenter.labelForCode(
+          initialData.masterData.positions,
+          initialData.member.positionCode,
+        ) ??
+        (initialData.member.isOwner ? 'Ketua Umum' : null);
+    selectedDivisi = _presenter.labelForCode(
+      initialData.masterData.divisions,
+      initialData.member.divisionCode,
+    );
+    selectedSkills = _presenter.buildSelectedSkills(initialData);
+    weeklyCapacity =
+        initialData.member.weeklyCapacityHours.clamp(0, 40).toDouble();
+    isAvailable = initialData.member.availabilityStatus != 'unavailable';
+
+    for (final link in portfolioLinks) {
+      link.dispose();
+    }
+
+    portfolioLinks = initialData.portfolioLinks.map((item) {
+      final draft = PortfolioLink(
+        platform: _presenter.labelForCode(
+          initialData.masterData.portfolioPlatforms,
+          item.platformCode,
+        ),
+      );
+      draft.urlController.text = item.url;
+      return draft;
+    }).toList();
+  }
+
   void nextStep() {
     if (currentStep < 3) {
       setState(() => currentStep++);
-      _pageController.animateToPage(currentStep, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _pageController.animateToPage(currentStep,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
     }
   }
 
   void previousStep() {
     if (currentStep > 0) {
       setState(() => currentStep--);
-      _pageController.animateToPage(currentStep, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _pageController.animateToPage(currentStep,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
     }
   }
 
-  void handleComplete() {
+  Future<void> handleComplete() async {
+    final initialData = _initialData;
+    if (initialData == null) {
+      return;
+    }
+
+    setState(() {
+      isSubmitting = true;
+    });
+
+    final portfolioDrafts = <PortfolioLinkInput>[];
+    for (var index = 0; index < portfolioLinks.length; index++) {
+      final link = portfolioLinks[index];
+      final url = link.urlController.text.trim();
+      final platform = link.platform?.trim();
+
+      if ((platform == null || platform.isEmpty) && url.isEmpty) {
+        continue;
+      }
+
+      portfolioDrafts.add(
+        PortfolioLinkInput(
+          platformCode: platform ?? '',
+          url: url,
+          sortOrder: index,
+        ),
+      );
+    }
+
+    final result = await _presenter.submit(
+      initialData: initialData,
+      fullName: namaLengkapController.text,
+      nim: nimController.text,
+      studyProgramLabel: selectedProdi,
+      positionLabel: selectedJabatan,
+      divisionLabel: selectedDivisi,
+      weeklyCapacityHours: weeklyCapacity.toInt(),
+      isAvailable: isAvailable,
+      bio: bioController.text,
+      portfolioLinks: portfolioDrafts,
+      selectedSkills: selectedSkills,
+      avatarPath: initialData.profile?.avatarPath,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      isSubmitting = false;
+    });
+
+    if (result.isFailure) {
+      MessageHelper.showSnackBar(context, result.error!.message);
+      return;
+    }
+
     Navigator.pushReplacementNamed(context, '/dashboard');
   }
 
   bool isStepValid() {
+    if (isLoadingInitialData || _initialData == null) {
+      return false;
+    }
+
     switch (currentStep) {
       case 0:
-        return namaLengkapController.text.isNotEmpty && nimController.text.isNotEmpty && selectedProdi != null && selectedJabatan != null && selectedDivisi != null;
+        return namaLengkapController.text.isNotEmpty &&
+            nimController.text.isNotEmpty &&
+            selectedProdi != null &&
+            (isOwnerLocked || selectedJabatan != null) &&
+            (isOwnerLocked || selectedDivisi != null);
       case 1:
         return selectedSkills.isNotEmpty;
       case 2:
@@ -90,6 +240,58 @@ class _OnboardingPageState extends State<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (isLoadingInitialData) {
+      return Scaffold(
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                theme.colorScheme.primary.withOpacity(0.05),
+                theme.scaffoldBackgroundColor,
+                theme.colorScheme.secondary.withOpacity(0.05),
+              ],
+            ),
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+
+    if (_initialData == null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  loadError ?? 'Gagal memuat data onboarding',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      isLoadingInitialData = true;
+                      loadError = null;
+                    });
+                    _loadInitialData();
+                  },
+                  child: const Text('Coba Lagi'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -129,7 +331,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
     return Container(
       decoration: BoxDecoration(
         color: theme.cardColor,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2))
+        ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: SafeArea(
@@ -143,21 +350,32 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   height: 40,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
-                    gradient: LinearGradient(colors: [theme.colorScheme.primary, theme.colorScheme.secondary]),
+                    gradient: LinearGradient(colors: [
+                      theme.colorScheme.primary,
+                      theme.colorScheme.secondary
+                    ]),
                   ),
-                  child: const Icon(Icons.person, size: 20, color: Colors.white),
+                  child:
+                      const Icon(Icons.person, size: 20, color: Colors.white),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Profiling Anggota', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      Text('Lengkapi data diri Anda', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text('Profiling Anggota',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text('Lengkapi data diri Anda',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
                     ],
                   ),
                 ),
-                Text('${currentStep + 1}/4', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.primary)),
+                Text('${currentStep + 1}/4',
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.primary)),
               ],
             ),
             const SizedBox(height: 12),
@@ -171,7 +389,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     margin: EdgeInsets.only(right: index < 3 ? 8 : 0),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(2),
-                      color: isCompleted || isActive ? theme.colorScheme.primary : Colors.grey[300],
+                      color: isCompleted || isActive
+                          ? theme.colorScheme.primary
+                          : Colors.grey[300],
                     ),
                   ),
                 );
@@ -187,7 +407,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
     return Container(
       decoration: BoxDecoration(
         color: theme.cardColor,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -2))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -2))
+        ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: SafeArea(
@@ -200,7 +425,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   onPressed: previousStep,
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   child: const Text('Kembali'),
                 ),
@@ -209,15 +435,24 @@ class _OnboardingPageState extends State<OnboardingPage> {
             Expanded(
               flex: currentStep == 0 ? 1 : 1,
               child: ElevatedButton(
-                onPressed: isStepValid() ? (currentStep == 3 ? handleComplete : nextStep) : null,
+                onPressed: (isStepValid() && !isSubmitting)
+                    ? (currentStep == 3 ? handleComplete : nextStep)
+                    : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: theme.colorScheme.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   disabledBackgroundColor: Colors.grey[300],
                 ),
-                child: Text(currentStep == 3 ? 'Selesai' : 'Lanjut'),
+                child: Text(
+                  currentStep == 3 && isSubmitting
+                      ? 'Menyimpan...'
+                      : currentStep == 3
+                          ? 'Selesai'
+                          : 'Lanjut',
+                ),
               ),
             ),
           ],
@@ -235,9 +470,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Step 1: Data Identitas', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const Text('Step 1: Data Identitas',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text('Informasi dasar tentang diri Anda', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+              Text('Informasi dasar tentang diri Anda',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600])),
               const SizedBox(height: 32),
               Center(
                 child: GestureDetector(
@@ -248,16 +485,21 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: theme.colorScheme.primary.withOpacity(0.1),
-                      border: Border.all(color: theme.colorScheme.primary, width: 2),
+                      border: Border.all(
+                          color: theme.colorScheme.primary, width: 2),
                     ),
                     child: profileImage != null
-                        ? ClipOval(child: Image.file(profileImage!, fit: BoxFit.cover))
-                        : Icon(Icons.add_a_photo, size: 40, color: theme.colorScheme.primary),
+                        ? ClipOval(
+                            child: Image.file(profileImage!, fit: BoxFit.cover))
+                        : Icon(Icons.add_a_photo,
+                            size: 40, color: theme.colorScheme.primary),
                   ),
                 ),
               ),
               const SizedBox(height: 8),
-              Center(child: Text('Upload Foto Profil', style: TextStyle(fontSize: 12, color: Colors.grey[600]))),
+              Center(
+                  child: Text('Upload Foto Profil',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]))),
               const SizedBox(height: 32),
               _buildTextField(
                 controller: namaLengkapController,
@@ -280,7 +522,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
               _buildDropdown(
                 label: 'Program Studi',
                 value: selectedProdi,
-                items: OnboardingData.prodiList,
+                items: _initialData!.masterData.studyPrograms
+                    .map((item) => item.label)
+                    .toList(),
                 onChanged: (value) => setState(() => selectedProdi = value),
                 icon: Icons.school,
                 theme: theme,
@@ -290,21 +534,31 @@ class _OnboardingPageState extends State<OnboardingPage> {
               _buildDropdown(
                 label: 'Jabatan',
                 value: selectedJabatan,
-                items: OnboardingData.jabatanList,
-                onChanged: (value) => setState(() => selectedJabatan = value),
+                items: _initialData!.masterData.positions
+                    .map((item) => item.label)
+                    .toList(),
+                onChanged: isOwnerLocked
+                    ? null
+                    : (value) => setState(() => selectedJabatan = value),
                 icon: Icons.work,
                 theme: theme,
                 required: true,
+                enabled: !isOwnerLocked,
               ),
               const SizedBox(height: 20),
               _buildDropdown(
                 label: 'Divisi',
                 value: selectedDivisi,
-                items: OnboardingData.divisiList,
-                onChanged: (value) => setState(() => selectedDivisi = value),
+                items: _initialData!.masterData.divisions
+                    .map((item) => item.label)
+                    .toList(),
+                onChanged: isOwnerLocked
+                    ? null
+                    : (value) => setState(() => selectedDivisi = value),
                 icon: Icons.group,
                 theme: theme,
                 required: true,
+                enabled: !isOwnerLocked,
               ),
             ],
           ),
@@ -322,25 +576,33 @@ class _OnboardingPageState extends State<OnboardingPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Step 2: Skill Inventory', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const Text('Step 2: Skill Inventory',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text('Pilih skill yang Anda kuasai dan tentukan tingkat kemahiran', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+              Text(
+                  'Pilih skill yang Anda kuasai dan tentukan tingkat kemahiran',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600])),
               const SizedBox(height: 32),
-              ...OnboardingData.skillCategories.entries.map((category) {
+              ..._initialData!.masterData.skillCategories.map((category) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.category, size: 18, color: theme.colorScheme.primary),
+                        Icon(Icons.category,
+                            size: 18, color: theme.colorScheme.primary),
                         const SizedBox(width: 8),
-                        Text(category.key, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: theme.colorScheme.primary)),
+                        Text(category.label,
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.primary)),
                       ],
                     ),
                     const SizedBox(height: 12),
                     LayoutBuilder(
                       builder: (context, constraints) {
-                        final skills = category.value;
+                        final skills = category.skills;
                         return Column(
                           children: [
                             for (int i = 0; i < skills.length; i += 2)
@@ -349,12 +611,20 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                 child: Row(
                                   children: [
                                     Expanded(
-                                      child: _buildSkillItem(theme, category.key, skills[i]),
+                                      child: _buildSkillItem(
+                                        theme,
+                                        category.label,
+                                        skills[i].name,
+                                      ),
                                     ),
                                     if (i + 1 < skills.length) ...[
                                       const SizedBox(width: 8),
                                       Expanded(
-                                        child: _buildSkillItem(theme, category.key, skills[i + 1]),
+                                        child: _buildSkillItem(
+                                          theme,
+                                          category.label,
+                                          skills[i + 1].name,
+                                        ),
                                       ),
                                     ] else
                                       const Expanded(child: SizedBox()),
@@ -383,13 +653,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     children: [
                       Text(
                         'Skills Terpilih (${selectedSkills.values.fold(0, (sum, skills) => sum + skills.length)}):',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: selectedSkills.entries.expand((categoryEntry) {
+                        children:
+                            selectedSkills.entries.expand((categoryEntry) {
                           return categoryEntry.value.entries.map((skillEntry) {
                             Color proficiencyColor;
                             String proficiencyLabel;
@@ -411,14 +683,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                 proficiencyLabel = 'Unknown';
                             }
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
                                 color: proficiencyColor,
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Text(
                                 '${skillEntry.key} • $proficiencyLabel',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white),
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white),
                               ),
                             );
                           });
@@ -466,7 +742,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isSelected ? theme.colorScheme.primary : Colors.grey[300]!,
+                color:
+                    isSelected ? theme.colorScheme.primary : Colors.grey[300]!,
                 width: isSelected ? 2 : 1,
               ),
             ),
@@ -478,12 +755,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.black87,
-                      fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w500 : FontWeight.normal,
                     ),
                   ),
                 ),
                 if (isSelected)
-                  Icon(Icons.check_circle, size: 16, color: theme.colorScheme.primary),
+                  Icon(Icons.check_circle,
+                      size: 16, color: theme.colorScheme.primary),
               ],
             ),
           ),
@@ -492,11 +771,17 @@ class _OnboardingPageState extends State<OnboardingPage> {
           const SizedBox(height: 6),
           Row(
             children: [
-              Expanded(child: _buildProficiencyButton(theme, categoryKey, skill, proficiency, 'beginner', 'Beginner')),
+              Expanded(
+                  child: _buildProficiencyButton(theme, categoryKey, skill,
+                      proficiency, 'beginner', 'Beginner')),
               const SizedBox(width: 4),
-              Expanded(child: _buildProficiencyButton(theme, categoryKey, skill, proficiency, 'intermediate', 'Intermediate')),
+              Expanded(
+                  child: _buildProficiencyButton(theme, categoryKey, skill,
+                      proficiency, 'intermediate', 'Intermediate')),
               const SizedBox(width: 4),
-              Expanded(child: _buildProficiencyButton(theme, categoryKey, skill, proficiency, 'expert', 'Expert')),
+              Expanded(
+                  child: _buildProficiencyButton(theme, categoryKey, skill,
+                      proficiency, 'expert', 'Expert')),
             ],
           ),
         ],
@@ -504,7 +789,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
-  Widget _buildProficiencyButton(ThemeData theme, String categoryKey, String skillName, String currentProficiency, String value, String label) {
+  Widget _buildProficiencyButton(ThemeData theme, String categoryKey,
+      String skillName, String currentProficiency, String value, String label) {
     final isSelected = currentProficiency == value;
     Color buttonColor;
     switch (value) {
@@ -559,9 +845,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Step 3: Capacity & Commitment', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const Text('Step 3: Capacity & Commitment',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text('Berapa banyak waktu yang bisa Anda dedikasikan?', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+              Text('Berapa banyak waktu yang bisa Anda dedikasikan?',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600])),
               const SizedBox(height: 32),
               Container(
                 padding: const EdgeInsets.all(24),
@@ -576,14 +864,23 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Flexible(child: Text('Kapasitas Mingguan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+                        const Flexible(
+                            child: Text('Kapasitas Mingguan',
+                                style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600))),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.primary.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Text('${weeklyCapacity.toInt()} jam/minggu', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+                          child: Text('${weeklyCapacity.toInt()} jam/minggu',
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.primary)),
                         ),
                       ],
                     ),
@@ -593,7 +890,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         activeTrackColor: theme.colorScheme.primary,
                         inactiveTrackColor: Colors.grey[300],
                         thumbColor: theme.colorScheme.primary,
-                        overlayColor: theme.colorScheme.primary.withOpacity(0.2),
+                        overlayColor:
+                            theme.colorScheme.primary.withOpacity(0.2),
                         trackHeight: 4,
                       ),
                       child: Slider(
@@ -601,14 +899,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         min: 0,
                         max: 40,
                         divisions: 8,
-                        onChanged: (value) => setState(() => weeklyCapacity = value),
+                        onChanged: (value) =>
+                            setState(() => weeklyCapacity = value),
                       ),
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('0 jam', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                        Text('40 jam', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                        Text('0 jam',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey[600])),
+                        Text('40 jam',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey[600])),
                       ],
                     ),
                   ],
@@ -628,9 +931,16 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Status Ketersediaan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                          const Text('Status Ketersediaan',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 4),
-                          Text(isAvailable ? 'Tersedia untuk tugas baru' : 'Sedang tidak tersedia', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                          Text(
+                              isAvailable
+                                  ? 'Tersedia untuk tugas baru'
+                                  : 'Sedang tidak tersedia',
+                              style: TextStyle(
+                                  fontSize: 14, color: Colors.grey[600])),
                         ],
                       ),
                     ),
@@ -658,14 +968,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Step 4: Portfolio & Bio', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const Text('Step 4: Portfolio & Bio',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text('Tunjukkan karya dan ceritakan tentang diri Anda', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+              Text('Tunjukkan karya dan ceritakan tentang diri Anda',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600])),
               const SizedBox(height: 32),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Link Portfolio', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const Text('Link Portfolio',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   TextButton.icon(
                     onPressed: () {
                       setState(() {
@@ -687,7 +1001,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     border: Border.all(color: Colors.grey[300]!),
                   ),
                   child: Center(
-                    child: Text('Belum ada link portfolio. Klik "Tambah Link" untuk menambahkan.', style: TextStyle(color: Colors.grey[600]), textAlign: TextAlign.center),
+                    child: Text(
+                        'Belum ada link portfolio. Klik "Tambah Link" untuk menambahkan.',
+                        style: TextStyle(color: Colors.grey[600]),
+                        textAlign: TextAlign.center),
                   ),
                 ),
               ...portfolioLinks.asMap().entries.map((entry) {
@@ -706,14 +1023,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                 hintText: 'Platform',
                                 filled: true,
                                 fillColor: theme.scaffoldBackgroundColor,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: theme.dividerColor),
+                                  borderSide:
+                                      BorderSide(color: theme.dividerColor),
                                 ),
                               ),
-                              items: OnboardingData.platformList.map((platform) {
-                                return DropdownMenuItem(value: platform, child: Text(platform));
+                              items: _initialData!.masterData.portfolioPlatforms
+                                  .map((platform) {
+                                return DropdownMenuItem(
+                                    value: platform.label,
+                                    child: Text(platform.label));
                               }).toList(),
                               onChanged: (value) {
                                 setState(() {
@@ -731,10 +1053,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                       hintText: 'https://...',
                                       filled: true,
                                       fillColor: theme.scaffoldBackgroundColor,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 12),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide(color: theme.dividerColor),
+                                        borderSide: BorderSide(
+                                            color: theme.dividerColor),
                                       ),
                                     ),
                                   ),
@@ -747,7 +1072,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                       portfolioLinks.removeAt(index);
                                     });
                                   },
-                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  icon: const Icon(Icons.delete,
+                                      color: Colors.red),
                                 ),
                               ],
                             ),
@@ -764,14 +1090,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                 hintText: 'Platform',
                                 filled: true,
                                 fillColor: theme.scaffoldBackgroundColor,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: theme.dividerColor),
+                                  borderSide:
+                                      BorderSide(color: theme.dividerColor),
                                 ),
                               ),
-                              items: OnboardingData.platformList.map((platform) {
-                                return DropdownMenuItem(value: platform, child: Text(platform));
+                              items: _initialData!.masterData.portfolioPlatforms
+                                  .map((platform) {
+                                return DropdownMenuItem(
+                                    value: platform.label,
+                                    child: Text(platform.label));
                               }).toList(),
                               onChanged: (value) {
                                 setState(() {
@@ -789,10 +1120,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                 hintText: 'https://...',
                                 filled: true,
                                 fillColor: theme.scaffoldBackgroundColor,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: theme.dividerColor),
+                                  borderSide:
+                                      BorderSide(color: theme.dividerColor),
                                 ),
                               ),
                             ),
@@ -814,11 +1147,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 );
               }),
               const SizedBox(height: 24),
-              const Text('Bio Singkat', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              const Text('Bio Singkat',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
               const Row(
                 children: [
-                  Text('Ceritakan tentang diri Anda', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text('Ceritakan tentang diri Anda',
+                      style: TextStyle(fontSize: 12, color: Colors.grey)),
                   Text(' *', style: TextStyle(color: Colors.red)),
                 ],
               ),
@@ -827,7 +1162,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 controller: bioController,
                 maxLines: 5,
                 decoration: InputDecoration(
-                  hintText: 'Saya adalah mahasiswa yang passionate di bidang...',
+                  hintText:
+                      'Saya adalah mahasiswa yang passionate di bidang...',
                   filled: true,
                   fillColor: theme.scaffoldBackgroundColor,
                   contentPadding: const EdgeInsets.all(16),
@@ -844,7 +1180,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 decoration: BoxDecoration(
                   color: theme.colorScheme.primary.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+                  border: Border.all(
+                      color: theme.colorScheme.primary.withOpacity(0.2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -853,18 +1190,31 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       children: [
                         Icon(Icons.summarize, color: theme.colorScheme.primary),
                         const SizedBox(width: 12),
-                        const Text('Ringkasan Profil', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        const Text('Ringkasan Profil',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w600)),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    _buildSummaryItem('Nama', namaLengkapController.text.isEmpty ? '-' : namaLengkapController.text),
-                    _buildSummaryItem('NIM', nimController.text.isEmpty ? '-' : nimController.text),
+                    _buildSummaryItem(
+                        'Nama',
+                        namaLengkapController.text.isEmpty
+                            ? '-'
+                            : namaLengkapController.text),
+                    _buildSummaryItem('NIM',
+                        nimController.text.isEmpty ? '-' : nimController.text),
                     _buildSummaryItem('Prodi', selectedProdi ?? '-'),
                     _buildSummaryItem('Jabatan', selectedJabatan ?? '-'),
                     _buildSummaryItem('Divisi', selectedDivisi ?? '-'),
-                    _buildSummaryItem('Total Skill', selectedSkills.values.fold(0, (sum, skills) => sum + skills.length).toString()),
-                    _buildSummaryItem('Kapasitas', '${weeklyCapacity.toInt()} jam/minggu'),
-                    _buildSummaryItem('Status', isAvailable ? 'Tersedia' : 'Tidak Tersedia'),
+                    _buildSummaryItem(
+                        'Total Skill',
+                        selectedSkills.values
+                            .fold(0, (sum, skills) => sum + skills.length)
+                            .toString()),
+                    _buildSummaryItem(
+                        'Kapasitas', '${weeklyCapacity.toInt()} jam/minggu'),
+                    _buildSummaryItem(
+                        'Status', isAvailable ? 'Tersedia' : 'Tidak Tersedia'),
                   ],
                 ),
               ),
@@ -880,8 +1230,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Expanded(flex: 2, child: Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey))),
-          Expanded(flex: 3, child: Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
+          Expanded(
+              flex: 2,
+              child: Text(label,
+                  style: const TextStyle(fontSize: 14, color: Colors.grey))),
+          Expanded(
+              flex: 3,
+              child: Text(value,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w500))),
         ],
       ),
     );
@@ -902,7 +1259,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
           children: [
             Icon(icon, size: 16, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            Text(label,
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
             if (required) const Text(' *', style: TextStyle(color: Colors.red)),
           ],
         ),
@@ -913,18 +1272,21 @@ class _OnboardingPageState extends State<OnboardingPage> {
             hintText: hint,
             filled: true,
             fillColor: theme.scaffoldBackgroundColor,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: theme.dividerColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
+              borderSide:
+                  BorderSide(color: theme.dividerColor.withOpacity(0.3)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+              borderSide:
+                  BorderSide(color: theme.colorScheme.primary, width: 2),
             ),
           ),
           onChanged: (value) => setState(() {}),
@@ -937,10 +1299,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
     required String label,
     required String? value,
     required List<String> items,
-    required Function(String?) onChanged,
+    ValueChanged<String?>? onChanged,
     required IconData icon,
     required ThemeData theme,
     bool required = false,
+    bool enabled = true,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -949,34 +1312,42 @@ class _OnboardingPageState extends State<OnboardingPage> {
           children: [
             Icon(icon, size: 16, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            Text(label,
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
             if (required) const Text(' *', style: TextStyle(color: Colors.red)),
           ],
         ),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: value,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: theme.scaffoldBackgroundColor,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.dividerColor),
+        IgnorePointer(
+          ignoring: !enabled,
+          child: DropdownButtonFormField<String>(
+            value: value,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: theme.scaffoldBackgroundColor,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: theme.dividerColor),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    BorderSide(color: theme.dividerColor.withOpacity(0.3)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    BorderSide(color: theme.colorScheme.primary, width: 2),
+              ),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
-            ),
+            items: items.map((item) {
+              return DropdownMenuItem(value: item, child: Text(item));
+            }).toList(),
+            onChanged: onChanged ?? (_) {},
           ),
-          items: items.map((item) {
-            return DropdownMenuItem(value: item, child: Text(item));
-          }).toList(),
-          onChanged: onChanged,
         ),
       ],
     );
