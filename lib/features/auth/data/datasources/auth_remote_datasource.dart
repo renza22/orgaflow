@@ -20,6 +20,12 @@ class AuthRemoteDatasource {
     );
   }
 
+  Future<void> requestPasswordReset({
+    required String email,
+  }) {
+    return _client.auth.resetPasswordForEmail(email);
+  }
+
   Future<AuthResponse> signUp(RegisterInput input) {
     return _client.auth.signUp(
       email: input.email,

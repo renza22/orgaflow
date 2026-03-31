@@ -1,5 +1,6 @@
 import '../../../../core/errors/app_error.dart';
 import '../../../../core/result/result.dart';
+import '../../../../core/utils/nim_validator.dart';
 import '../../data/repositories/onboarding_repository.dart';
 import '../../domain/models/master_option.dart';
 import '../../domain/models/onboarding_initial_data.dart';
@@ -104,6 +105,7 @@ class OnboardingPresenter {
       initialData.masterData.studyPrograms,
       studyProgramLabel,
     );
+    final nimError = NimValidator.validate(nim);
 
     final isOwner = isOwnerLocked(initialData);
     final positionCode = isOwner
@@ -128,6 +130,12 @@ class OnboardingPresenter {
     if (!isOwner && divisionCode == null) {
       return Result<void>.failure(
         const AppError('Divisi wajib dipilih.'),
+      );
+    }
+
+    if (nimError != null) {
+      return Result<void>.failure(
+        AppError(nimError),
       );
     }
 
@@ -171,7 +179,7 @@ class OnboardingPresenter {
 
     final submission = OnboardingSubmission(
       fullName: fullName.trim(),
-      nim: nim.trim(),
+      nim: NimValidator.normalize(nim),
       studyProgramCode: studyProgramCode,
       bio: bio.trim(),
       avatarPath: avatarPath,

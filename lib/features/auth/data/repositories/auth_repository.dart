@@ -31,6 +31,17 @@ class AuthRepository {
     }
   }
 
+  Future<Result<void>> requestPasswordReset({
+    required String email,
+  }) async {
+    try {
+      await _remoteDatasource.requestPasswordReset(email: email);
+      return Result<void>.success(null);
+    } catch (error) {
+      return Result<void>.failure(ErrorMapper.map(error));
+    }
+  }
+
   Future<Result<RegisterFlowResult>> signUp(RegisterInput input) async {
     try {
       final response = await _remoteDatasource.signUp(input);

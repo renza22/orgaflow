@@ -68,13 +68,21 @@ class ErrorMapper {
 
   static String _mapPostgrestMessage(PostgrestException error) {
     final message = error.message.toLowerCase();
+    final details = (error.details ?? '').toString().toLowerCase();
 
     if (message.contains('duplicate key value')) {
+      if (message.contains('members') || details.contains('members')) {
+        return 'Anda sudah tergabung di organisasi ini.';
+      }
       return 'Data yang sama sudah ada.';
     }
 
     if (message.contains('invite code not found')) {
       return 'Kode organisasi tidak ditemukan atau organisasi sudah tidak aktif.';
+    }
+
+    if (message.contains('invalid invite code format')) {
+      return 'Format kode organisasi tidak valid. Contoh: HMTI-2026-ABC1';
     }
 
     if (message.contains('dependency must belong to the same project')) {

@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../../../core/utils/invite_code_utils.dart';
 import '../../../onboarding/domain/models/master_option.dart';
 import '../../domain/models/create_organization_input.dart';
 import '../../domain/models/join_organization_input.dart';
@@ -151,12 +153,26 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage>
   }
 
   Future<void> handleJoinOrganization() async {
-    if (organizationCodeController.text.trim().isEmpty) {
+    final normalizedInviteCode = InviteCodeUtils.normalize(
+      organizationCodeController.text,
+    );
+
+    if (normalizedInviteCode.isEmpty) {
       setState(() => errorMessage = 'Mohon masukkan kode organisasi');
       return;
     }
-    final codePattern = RegExp(r'^[A-Z0-9]+-\d{4}-[A-Z0-9]+$');
-    if (!codePattern.hasMatch(organizationCodeController.text.toUpperCase())) {
+
+    if (organizationCodeController.text != normalizedInviteCode) {
+      organizationCodeController.value =
+          organizationCodeController.value.copyWith(
+        text: normalizedInviteCode,
+        selection: TextSelection.collapsed(
+          offset: normalizedInviteCode.length,
+        ),
+      );
+    }
+
+    if (!InviteCodeUtils.isValid(normalizedInviteCode)) {
       setState(() =>
           errorMessage = 'Format kode tidak valid. Contoh: HMTI-2026-ABC1');
       return;
@@ -169,7 +185,7 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage>
 
     final result = await _presenter.joinOrganization(
       JoinOrganizationInput(
-        inviteCode: organizationCodeController.text.trim().toUpperCase(),
+        inviteCode: normalizedInviteCode,
       ),
     );
 
@@ -191,11 +207,23 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage>
     Navigator.pushReplacementNamed(context, '/onboarding');
   }
 
-  void handleCopyCode() {
-    // In Flutter, we'll show a snackbar instead
+  Future<void> handleCopyCode() async {
+    final inviteCode = generatedCode.trim();
+    if (inviteCode.isEmpty) {
+      return;
+    }
+
+    await Clipboard.setData(
+      ClipboardData(text: inviteCode),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text('Kode disalin: $generatedCode'),
+          content: Text('Kode disalin: $inviteCode'),
           duration: const Duration(seconds: 2)),
     );
     setState(() => copied = true);

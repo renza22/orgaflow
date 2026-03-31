@@ -113,6 +113,23 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> handleForgotPassword() async {
+    final result = await (_presenter ??= AuthPresenter()).requestPasswordReset(
+      email: emailController.text,
+    );
+
+    if (!mounted) return;
+
+    if (result.isFailure) {
+      showMessage(result.error!.message);
+      return;
+    }
+
+    showMessage(
+      'Jika email terdaftar, tautan reset password akan dikirim ke inbox Anda.',
+    );
+  }
+
   void showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
@@ -550,9 +567,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
           ),
         ),
         TextButton(
-          onPressed: () {
-            // TODO: Implement forgot password
-          },
+          onPressed: handleForgotPassword,
           child: Text(
             'Lupa password?',
             style: TextStyle(

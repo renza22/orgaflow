@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/errors/app_error.dart';
 import '../../../../core/errors/error_mapper.dart';
 import '../../../../core/supabase_config.dart';
+import '../../../../core/utils/invite_code_utils.dart';
 import '../../../onboarding/domain/models/master_option.dart';
 import '../../domain/models/create_organization_input.dart';
 import '../../domain/models/join_organization_input.dart';
@@ -104,11 +105,18 @@ class OrganizationRemoteDatasource {
   Future<OrganizationMembershipResult> joinOrganizationByInviteCode(
     JoinOrganizationInput input,
   ) async {
+    final normalizedInviteCode = InviteCodeUtils.normalize(input.inviteCode);
+    if (!InviteCodeUtils.isValid(normalizedInviteCode)) {
+      throw const AppError(
+        'Format kode organisasi tidak valid. Contoh: HMTI-2026-ABC1',
+      );
+    }
+
     try {
       final response = await _client.rpc(
         'join_organization_by_invite_code',
         params: {
-          'p_invite_code': input.inviteCode,
+          'p_invite_code': normalizedInviteCode,
           'p_position_code': null,
           'p_division_code': null,
           'p_weekly_capacity_hours': 0,
@@ -139,13 +147,13 @@ class OrganizationRemoteDatasource {
     final organization = await _client
         .from('organizations')
         .select('id')
-        .eq('invite_code', input.inviteCode.trim().toUpperCase())
+        .eq('invite_code', normalizedInviteCode)
         .eq('is_active', true)
         .maybeSingle();
 
     if (organization == null) {
       throw const AppError(
-        'Kode organisasi tidak ditemukan atau organisasi sudah tidak aktif.',
+        'Kode organisasi tidak ditemukan atau join organization belum siap di server ini.',
       );
     }
 
