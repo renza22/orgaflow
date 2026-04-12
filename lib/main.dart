@@ -9,6 +9,10 @@ import 'features/profile/presentation/pages/profile_page.dart';
 import 'features/organization/presentation/pages/organization_choice_page.dart';
 import 'features/onboarding/presentation/pages/onboarding_page.dart'
     as onboarding;
+import 'features/dashboard/presentation/pages/dashboard_page.dart';
+import 'features/members/presentation/pages/members_page.dart';
+import 'features/projects/presentation/pages/projects_page.dart';
+import 'features/fairness/presentation/pages/fairness_dashboard_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,7 +41,11 @@ class MyApp extends StatelessWidget {
         '/reset-password': (context) => const ResetPasswordPage(),
         '/organization': (context) => const OrganizationChoicePage(),
         '/onboarding': (context) => const onboarding.OnboardingPage(),
-        '/dashboard': (context) => const ProfilePage(),
+        '/dashboard': (context) => const DashboardPage(),
+        '/profile': (context) => const ProfilePage(),
+        '/members': (context) => const MembersPage(),
+        '/projects': (context) => const ProjectsPage(),
+        '/fairness': (context) => const FairnessDashboardPage(),
       },
     );
   }
