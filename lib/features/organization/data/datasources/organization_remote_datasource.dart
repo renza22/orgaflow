@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/errors/app_error.dart';
@@ -13,6 +16,14 @@ class OrganizationRemoteDatasource {
   OrganizationRemoteDatasource({
     SupabaseClient? client,
   }) : _client = client ?? supabase;
+
+  static const String _organizationLogosBucket = 'organization-logos';
+  static const Set<String> _allowedLogoExtensions = {
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+  };
 
   final SupabaseClient _client;
 
@@ -197,6 +208,60 @@ class OrganizationRemoteDatasource {
     );
   }
 
+  Future<String> uploadOrganizationLogo({
+    required String organizationId,
+    String? existingLogoPath,
+    required XFile imageFile,
+  }) async {
+    final normalizedExistingLogoPath = _normalizeStoragePath(existingLogoPath);
+    final extension = _resolveLogoExtension(imageFile);
+    final uploadedAt = DateTime.now();
+    final newLogoPath =
+        '$organizationId/logo_${uploadedAt.millisecondsSinceEpoch}.$extension';
+    final bytes = await _readImageBytes(imageFile);
+
+    if (bytes.isEmpty) {
+      throw const AppError('File gambar tidak valid.');
+    }
+
+    try {
+      await _client.storage.from(_organizationLogosBucket).uploadBinary(
+            newLogoPath,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: _mimeTypeForExtension(extension),
+            ),
+          );
+    } catch (error) {
+      throw AppError(
+        'Gagal mengunggah logo organisasi.',
+        cause: error,
+      );
+    }
+
+    try {
+      await _client
+          .from('organizations')
+          .update({
+            'logo_path': newLogoPath,
+            'updated_at': uploadedAt.toUtc().toIso8601String(),
+          })
+          .eq('id', organizationId)
+          .select('id')
+          .single();
+    } catch (error) {
+      await _deleteOrganizationLogoBestEffort(newLogoPath);
+      rethrow;
+    }
+
+    if (normalizedExistingLogoPath != null &&
+        normalizedExistingLogoPath != newLogoPath) {
+      await _deleteOrganizationLogoBestEffort(normalizedExistingLogoPath);
+    }
+
+    return newLogoPath;
+  }
+
   Future<String> _resolveOwnerPositionCode() async {
     final byCode = await _client
         .from('position_templates')
@@ -262,5 +327,69 @@ class OrganizationRemoteDatasource {
     }
 
     throw const AppError('Response server tidak valid.');
+  }
+
+  String _resolveLogoExtension(XFile imageFile) {
+    final fileName =
+        imageFile.name.trim().isNotEmpty ? imageFile.name : imageFile.path;
+    final extension = _extractFileExtension(fileName) ?? 'png';
+
+    if (!_allowedLogoExtensions.contains(extension)) {
+      throw const AppError(
+        'Format gambar tidak didukung. Gunakan JPG, JPEG, PNG, atau WEBP.',
+      );
+    }
+
+    return extension;
+  }
+
+  String? _extractFileExtension(String fileName) {
+    final normalizedName = fileName.split('/').last.split('\\').last;
+    final separatorIndex = normalizedName.lastIndexOf('.');
+
+    if (separatorIndex < 0 || separatorIndex == normalizedName.length - 1) {
+      return null;
+    }
+
+    return normalizedName.substring(separatorIndex + 1).toLowerCase();
+  }
+
+  String? _normalizeStoragePath(String? path) {
+    final normalized = path?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  String _mimeTypeForExtension(String extension) {
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return 'image/png';
+    }
+  }
+
+  Future<void> _deleteOrganizationLogoBestEffort(String path) async {
+    try {
+      await _client.storage.from(_organizationLogosBucket).remove([path]);
+    } catch (_) {
+      // Best-effort cleanup only.
+    }
+  }
+
+  Future<Uint8List> _readImageBytes(XFile imageFile) async {
+    try {
+      return await imageFile.readAsBytes();
+    } catch (error) {
+      throw AppError(
+        'Gagal membaca file gambar.',
+        cause: error,
+      );
+    }
   }
 }

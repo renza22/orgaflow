@@ -1,3 +1,5 @@
+import 'package:image_picker/image_picker.dart';
+
 import '../../../../core/errors/error_mapper.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/session/session_service.dart';
@@ -52,6 +54,24 @@ class OrganizationRepository {
       return Result<OrganizationMembershipResult>.failure(
         ErrorMapper.map(error),
       );
+    }
+  }
+
+  Future<Result<String>> uploadOrganizationLogo({
+    required String organizationId,
+    String? existingLogoPath,
+    required XFile imageFile,
+  }) async {
+    try {
+      final logoPath = await _remoteDatasource.uploadOrganizationLogo(
+        organizationId: organizationId,
+        existingLogoPath: existingLogoPath,
+        imageFile: imageFile,
+      );
+      await _sessionService.clearCache();
+      return Result<String>.success(logoPath);
+    } catch (error) {
+      return Result<String>.failure(ErrorMapper.map(error));
     }
   }
 }

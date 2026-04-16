@@ -1,6 +1,15 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../../../core/errors/error_mapper.dart';
+import '../../../../core/session/session_context.dart';
+import '../../../../core/session/session_service.dart';
+import '../../../../core/supabase_config.dart';
+import '../../../../core/utils/message_helper.dart';
 import '../../models/project_model.dart';
+import '../../../organization/data/repositories/organization_repository.dart';
 import '../../../projects/presentation/pages/project_board_page.dart';
 import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
@@ -13,15 +22,25 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  static const String _organizationLogosBucket = 'organization-logos';
+
   bool _isGridView = true;
   String _currentTime = '';
   Timer? _timer;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final OrganizationRepository _organizationRepository =
+      OrganizationRepository();
+  final ImagePicker _imagePicker = ImagePicker();
+  SessionContext? _sessionContext;
+  bool _isLoadingSessionContext = false;
+  bool _isUploadingOrganizationLogo = false;
+  int? _organizationLogoVersion;
 
   @override
   void initState() {
     super.initState();
     _updateTime();
+    unawaited(_loadSessionContext());
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _updateTime();
     });
@@ -36,15 +55,180 @@ class _DashboardPageState extends State<DashboardPage> {
   void _updateTime() {
     final now = DateTime.now();
     setState(() {
-      _currentTime = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+      _currentTime =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     });
+  }
+
+  Future<void> _loadSessionContext({
+    bool refresh = false,
+  }) async {
+    if (_isLoadingSessionContext) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingSessionContext = true;
+    });
+
+    try {
+      final contextData = await sessionService.getCurrentContext(
+        refresh: refresh,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _sessionContext = contextData;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      MessageHelper.showSnackBar(
+        context,
+        ErrorMapper.map(error).message,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingSessionContext = false;
+        });
+      }
+    }
+  }
+
+  bool get _canEditOrganizationLogo {
+    final role = _sessionContext?.activeMember?.role;
+    return role == 'owner' || role == 'admin';
+  }
+
+  Future<void> _handleOrganizationLogoTap() async {
+    if (_isLoadingSessionContext ||
+        _isUploadingOrganizationLogo ||
+        !_canEditOrganizationLogo) {
+      return;
+    }
+
+    final organization = _sessionContext?.organization;
+    if (organization == null) {
+      return;
+    }
+
+    XFile? pickedImage;
+    try {
+      pickedImage = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+      );
+    } catch (_) {
+      if (mounted) {
+        MessageHelper.showSnackBar(context, 'Gagal membuka galeri gambar.');
+      }
+      return;
+    }
+
+    if (!mounted || pickedImage == null) {
+      return;
+    }
+
+    setState(() {
+      _isUploadingOrganizationLogo = true;
+    });
+
+    final result = await _organizationRepository.uploadOrganizationLogo(
+      organizationId: organization.id,
+      existingLogoPath: organization.logoPath,
+      imageFile: pickedImage,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result.isFailure) {
+      setState(() {
+        _isUploadingOrganizationLogo = false;
+      });
+      MessageHelper.showSnackBar(context, result.error!.message);
+      return;
+    }
+
+    _organizationLogoVersion = DateTime.now().millisecondsSinceEpoch;
+    await _loadSessionContext(refresh: true);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isUploadingOrganizationLogo = false;
+    });
+  }
+
+  String? _buildOrganizationLogoUrl() {
+    final logoPath = _sessionContext?.organization?.logoPath;
+    if (logoPath == null || logoPath.isEmpty) {
+      return null;
+    }
+
+    final publicUrl =
+        supabase.storage.from(_organizationLogosBucket).getPublicUrl(logoPath);
+    final version = _organizationLogoVersion ??
+        _sessionContext?.organization?.updatedAt?.millisecondsSinceEpoch;
+
+    if (version == null) {
+      return publicUrl;
+    }
+
+    final uri = Uri.parse(publicUrl);
+    final queryParameters = Map<String, String>.from(uri.queryParameters);
+    queryParameters['v'] = version.toString();
+    return uri.replace(queryParameters: queryParameters).toString();
+  }
+
+  Widget _buildOrganizationLogoPlaceholder() {
+    return const Icon(
+      Icons.image_outlined,
+      color: Colors.grey,
+      size: 28,
+    );
+  }
+
+  Widget _buildOrganizationLogoContent() {
+    final logoUrl = _buildOrganizationLogoUrl();
+    if (logoUrl == null) {
+      return _buildOrganizationLogoPlaceholder();
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        logoUrl,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return _buildOrganizationLogoPlaceholder();
+        },
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) {
+            return child;
+          }
+          return _buildOrganizationLogoPlaceholder();
+        },
+      ),
+    );
   }
 
   final List<Project> _mockProjects = [
     Project(
       id: 1,
       name: "Inagurasi PKKMB UNESA 5 2026",
-      description: "Acara pelantikan pengurus baru organisasi mahasiswa periode 2024/2025",
+      description:
+          "Acara pelantikan pengurus baru organisasi mahasiswa periode 2024/2025",
       deadline: DateTime(2026, 5, 15),
       progress: 65,
       totalTasks: 28,
@@ -56,7 +240,8 @@ class _DashboardPageState extends State<DashboardPage> {
     Project(
       id: 2,
       name: "Seminar Nasional IT",
-      description: "Seminar nasional tentang perkembangan teknologi informasi terkini",
+      description:
+          "Seminar nasional tentang perkembangan teknologi informasi terkini",
       deadline: DateTime(2026, 6, 20),
       progress: 42,
       totalTasks: 35,
@@ -68,7 +253,8 @@ class _DashboardPageState extends State<DashboardPage> {
     Project(
       id: 3,
       name: "Kampanye Sosial Media",
-      description: "Campaign branding dan promosi organisasi di platform digital",
+      description:
+          "Campaign branding dan promosi organisasi di platform digital",
       deadline: DateTime(2026, 4, 30),
       progress: 88,
       totalTasks: 16,
@@ -96,7 +282,20 @@ class _DashboardPageState extends State<DashboardPage> {
       .toList();
 
   String _formatDate(DateTime date) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des'
+    ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
@@ -125,7 +324,7 @@ class _DashboardPageState extends State<DashboardPage> {
           // Sidebar for desktop
           if (!isSmallScreen && !isMediumScreen)
             const ResponsiveSidebar(currentRoute: '/'),
-          
+
           // Main Content
           Expanded(
             child: SafeArea(
@@ -158,23 +357,22 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-
-
   Widget _buildHeader(bool isSmallScreen) {
+    final organizationName = _sessionContext?.organization?.name;
+
     return Row(
       children: [
         // Logo and Greeting
-        Container(
-          width: isSmallScreen ? 40 : 56,
-          height: isSmallScreen ? 40 : 56,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.image_outlined,
-            color: Colors.grey,
-            size: 28,
+        GestureDetector(
+          onTap: _canEditOrganizationLogo ? _handleOrganizationLogoTap : null,
+          child: Container(
+            width: isSmallScreen ? 40 : 56,
+            height: isSmallScreen ? 40 : 56,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: _buildOrganizationLogoContent(),
           ),
         ),
         const SizedBox(width: 16),
@@ -192,7 +390,9 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Himpunan Mahasiswa Teknik Informatika',
+                organizationName == null || organizationName.trim().isEmpty
+                    ? 'Himpunan Mahasiswa Teknik Informatika'
+                    : organizationName,
                 style: TextStyle(
                   fontSize: isSmallScreen ? 16 : 20,
                   fontWeight: FontWeight.w700,
@@ -209,7 +409,7 @@ class _DashboardPageState extends State<DashboardPage> {
             ],
           ),
         ),
-        
+
         // Clock and Date
         if (!isSmallScreen) ...[
           const SizedBox(width: 24),
@@ -218,7 +418,8 @@ class _DashboardPageState extends State<DashboardPage> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade600),
+                  Icon(Icons.calendar_today,
+                      size: 16, color: Colors.grey.shade600),
                   const SizedBox(width: 8),
                   Text(
                     _getCurrentDate(),
@@ -233,7 +434,8 @@ class _DashboardPageState extends State<DashboardPage> {
               const SizedBox(height: 8),
               // Digital Clock
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: const Color(0xFF6C5CE7),
                   borderRadius: BorderRadius.circular(8),
@@ -257,8 +459,29 @@ class _DashboardPageState extends State<DashboardPage> {
 
   String _getCurrentDate() {
     final now = DateTime.now();
-    final days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    final days = [
+      'Minggu',
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu'
+    ];
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des'
+    ];
     return '${days[now.weekday % 7]}, ${now.day} ${months[now.month - 1]} ${now.year}';
   }
 
@@ -320,9 +543,11 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFF6C5CE7), width: 2),
+                    borderSide:
+                        const BorderSide(color: Color(0xFF6C5CE7), width: 2),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
               const SizedBox(height: 20),
@@ -350,9 +575,11 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFF6C5CE7), width: 2),
+                    borderSide:
+                        const BorderSide(color: Color(0xFF6C5CE7), width: 2),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
               const SizedBox(height: 20),
@@ -387,21 +614,25 @@ class _DashboardPageState extends State<DashboardPage> {
                   }
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.calendar_today, size: 20, color: Colors.grey.shade600),
+                      Icon(Icons.calendar_today,
+                          size: 20, color: Colors.grey.shade600),
                       const SizedBox(width: 12),
                       Text(
                         selectedDate != null
                             ? '${selectedDate!.day.toString().padLeft(2, '0')}/${selectedDate!.month.toString().padLeft(2, '0')}/${selectedDate!.year}'
                             : 'dd/mm/yyyy',
                         style: TextStyle(
-                          color: selectedDate != null ? Colors.black : Colors.grey.shade400,
+                          color: selectedDate != null
+                              ? Colors.black
+                              : Colors.grey.shade400,
                           fontSize: 14,
                         ),
                       ),
@@ -416,7 +647,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   TextButton(
                     onPressed: () => Navigator.pop(context),
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
                     ),
                     child: const Text(
                       'Batal',
@@ -430,8 +662,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   const SizedBox(width: 12),
                   ElevatedButton(
                     onPressed: () {
-                      if (nameController.text.isNotEmpty && 
-                          descController.text.isNotEmpty && 
+                      if (nameController.text.isNotEmpty &&
+                          descController.text.isNotEmpty &&
                           selectedDate != null) {
                         // TODO: Add project logic here
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -453,7 +685,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6C5CE7),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 32, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -505,7 +738,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ],
       );
     }
-    
+
     return Row(
       children: [
         Expanded(
@@ -578,9 +811,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   IconButton(
                     icon: Icon(
                       Icons.grid_view,
-                      color: _isGridView
-                          ? const Color(0xFF6C5CE7)
-                          : Colors.grey,
+                      color:
+                          _isGridView ? const Color(0xFF6C5CE7) : Colors.grey,
                       size: 20,
                     ),
                     onPressed: () => setState(() => _isGridView = true),
@@ -588,9 +820,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   IconButton(
                     icon: Icon(
                       Icons.view_list,
-                      color: !_isGridView
-                          ? const Color(0xFF6C5CE7)
-                          : Colors.grey,
+                      color:
+                          !_isGridView ? const Color(0xFF6C5CE7) : Colors.grey,
                       size: 20,
                     ),
                     onPressed: () => setState(() => _isGridView = false),
@@ -623,7 +854,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildProjectGrid(bool isSmallScreen) {
     final projects = _mockProjects;
-    
+
     if (projects.isEmpty) {
       return Center(
         child: Padding(
@@ -644,7 +875,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       );
     }
-    
+
     if (_isGridView) {
       return LayoutBuilder(
         builder: (context, constraints) {
@@ -672,7 +903,7 @@ class _DashboardPageState extends State<DashboardPage> {
         },
       );
     }
-    
+
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -825,7 +1056,8 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 if (project.isUrgent || project.isOverdue)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.red,
                       borderRadius: BorderRadius.circular(6),
@@ -833,7 +1065,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.warning_amber_rounded, size: 12, color: Colors.white),
+                        const Icon(Icons.warning_amber_rounded,
+                            size: 12, color: Colors.white),
                         const SizedBox(width: 4),
                         Text(
                           project.isOverdue ? 'Overdue' : 'Urgent',
@@ -914,11 +1147,13 @@ class _DashboardPageState extends State<DashboardPage> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade600),
+                      Icon(Icons.calendar_today,
+                          size: 16, color: Colors.grey.shade600),
                       const SizedBox(width: 8),
                       Text(
                         _formatDate(project.deadline),
-                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                        style: TextStyle(
+                            fontSize: 13, color: Colors.grey.shade600),
                       ),
                     ],
                   ),
@@ -1009,7 +1244,9 @@ class _DashboardPageState extends State<DashboardPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Progress', style: TextStyle(fontSize: 12)),
-                      Text('${project.progress}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      Text('${project.progress}%',
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600)),
                     ],
                   ),
                   const SizedBox(height: 4),

@@ -94,7 +94,10 @@ class SessionService {
     if (activeMember != null) {
       final organizationJson = await _client
           .from('organizations')
-          .select()
+          .select(
+            'id, name, slug, type_code, invite_code, description, logo_path, '
+            'created_by, is_active, created_at, updated_at',
+          )
           .eq('id', activeMember.organizationId)
           .maybeSingle();
 
