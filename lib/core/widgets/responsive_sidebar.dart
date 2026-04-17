@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class ResponsiveSidebar extends StatelessWidget {
+class ResponsiveSidebar extends StatefulWidget {
   final String currentRoute;
 
   const ResponsiveSidebar({
@@ -9,9 +9,36 @@ class ResponsiveSidebar extends StatelessWidget {
   });
 
   @override
+  State<ResponsiveSidebar> createState() => _ResponsiveSidebarState();
+}
+
+class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
+  // Static variable to persist collapsed state across page navigations
+  static bool _persistentCollapsedState = false;
+  
+  late bool _isCollapsed;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize from persistent state
+    _isCollapsed = _persistentCollapsedState;
+  }
+
+  void _toggleSidebar() {
+    setState(() {
+      _isCollapsed = !_isCollapsed;
+      // Update persistent state
+      _persistentCollapsedState = _isCollapsed;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 250,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      width: _isCollapsed ? 70 : 250,
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -19,7 +46,7 @@ class ResponsiveSidebar extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(2, 0),
           ),
@@ -27,22 +54,39 @@ class ResponsiveSidebar extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Menu Utama Header
+          // Toggle Button
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+            padding: const EdgeInsets.all(16),
             child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'MENU UTAMA',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade500,
-                  letterSpacing: 0.5,
+              alignment: _isCollapsed ? Alignment.center : Alignment.centerRight,
+              child: IconButton(
+                icon: Icon(
+                  _isCollapsed ? Icons.menu : Icons.menu_open,
+                  color: Colors.grey.shade700,
                 ),
+                onPressed: _toggleSidebar,
+                tooltip: _isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar',
               ),
             ),
           ),
+
+          // Menu Utama Header
+          if (!_isCollapsed)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'MENU UTAMA',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade500,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
 
           // Menu Items
           Expanded(
@@ -54,12 +98,6 @@ class ResponsiveSidebar extends StatelessWidget {
                   icon: Icons.dashboard_outlined,
                   title: 'Dashboard',
                   route: '/dashboard',
-                ),
-                _buildMenuItem(
-                  context,
-                  icon: Icons.folder_outlined,
-                  title: 'Kelola Proyek',
-                  route: '/projects',
                 ),
                 _buildMenuItem(
                   context,
@@ -84,43 +122,50 @@ class ResponsiveSidebar extends StatelessWidget {
           ),
 
           // Burnout Alerts
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.red.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.shade200),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.warning_amber_rounded,
-                        color: Colors.red.shade700, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      '3 Burnout Alerts',
-                      style: TextStyle(
-                        color: Colors.red.shade700,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
+          if (!_isCollapsed)
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded,
+                          color: Colors.red.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '3 Burnout Alerts',
+                          style: TextStyle(
+                            color: Colors.red.shade700,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Members need workload rebalancing',
-                  style: TextStyle(
-                    color: Colors.red.shade600,
-                    fontSize: 12,
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Text(
+                    'Members need workload rebalancing',
+                    style: TextStyle(
+                      color: Colors.red.shade600,
+                      fontSize: 12,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
-          ),
 
           // User Profile
           Container(
@@ -130,51 +175,75 @@ class ResponsiveSidebar extends StatelessWidget {
                 top: BorderSide(color: Colors.grey.shade200),
               ),
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF6C5CE7),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'AD',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+            child: _isCollapsed
+                ? Center(
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF6C5CE7),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'AD',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  )
+                : Row(
                     children: [
-                      Text(
-                        'Admin',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF6C5CE7),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'AD',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
                         ),
                       ),
-                      Text(
-                        'Ketua Organisasi',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Admin',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              'Ketua Organisasi',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
+                      Icon(Icons.more_vert, size: 20, color: Colors.grey.shade600),
                     ],
                   ),
-                ),
-                const Icon(Icons.more_vert, size: 20),
-              ],
-            ),
           ),
         ],
       ),
@@ -187,48 +256,68 @@ class ResponsiveSidebar extends StatelessWidget {
     required String title,
     required String route,
   }) {
-    final isActive = currentRoute == route;
+    final isActive = widget.currentRoute == route || 
+                     (widget.currentRoute == '/' && route == '/dashboard');
 
-    return InkWell(
-      onTap: () {
-        if (route == '/settings') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Settings page coming soon')),
-          );
-        } else {
-          Navigator.pushNamed(context, route);
-        }
-      },
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF6C5CE7).withOpacity(0.1) : null,
-          borderRadius: BorderRadius.circular(8),
-          border: isActive
-              ? Border(
-                  left: BorderSide(
-                    color: const Color(0xFF6C5CE7),
-                    width: 3,
-                  ),
+    return Tooltip(
+      message: _isCollapsed ? title : '',
+      child: InkWell(
+        onTap: () {
+          if (route == '/settings') {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Settings page coming soon')),
+            );
+          } else if (route == '/dashboard' || route == '/') {
+            Navigator.pushReplacementNamed(context, '/dashboard');
+          } else {
+            Navigator.pushReplacementNamed(context, route);
+          }
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          padding: _isCollapsed 
+              ? const EdgeInsets.symmetric(vertical: 16)
+              : const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: isActive ? const Color(0xFF6C5CE7).withValues(alpha: 0.1) : null,
+            borderRadius: BorderRadius.circular(8),
+            border: isActive && !_isCollapsed
+                ? Border(
+                    left: BorderSide(
+                      color: const Color(0xFF6C5CE7),
+                      width: 3,
+                    ),
+                  )
+                : null,
+          ),
+          child: _isCollapsed
+              ? Icon(
+                  icon,
+                  color: isActive ? const Color(0xFF6C5CE7) : Colors.grey.shade600,
+                  size: 22,
                 )
-              : null,
-        ),
-        child: ListTile(
-          leading: Icon(
-            icon,
-            color: isActive ? const Color(0xFF6C5CE7) : Colors.grey.shade600,
-            size: 22,
-          ),
-          title: Text(
-            title,
-            style: TextStyle(
-              color: isActive ? const Color(0xFF6C5CE7) : Colors.grey.shade700,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-              fontSize: 14,
-            ),
-          ),
-          dense: true,
+              : Row(
+                  children: [
+                    Icon(
+                      icon,
+                      color: isActive ? const Color(0xFF6C5CE7) : Colors.grey.shade600,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          color: isActive ? const Color(0xFF6C5CE7) : Colors.grey.shade700,
+                          fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );

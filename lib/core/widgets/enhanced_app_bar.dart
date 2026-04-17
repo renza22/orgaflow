@@ -4,6 +4,7 @@ import 'notification_center.dart';
 
 class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool showMenuButton;
+  final bool? isOpen;
   final VoidCallback? onMenuPressed;
   final String? title;
   final String? subtitle;
@@ -11,6 +12,7 @@ class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
   const EnhancedAppBar({
     super.key,
     this.showMenuButton = false,
+    this.isOpen,
     this.onMenuPressed,
     this.title,
     this.subtitle,
@@ -31,7 +33,7 @@ class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -46,12 +48,25 @@ class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
           children: [
             // Menu button for mobile/tablet
             if (showMenuButton) ...[
-              IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: onMenuPressed,
-                color: Colors.grey.shade700,
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: IconButton(
+                    icon: Icon(
+                      isOpen ?? false ? Icons.menu_open : Icons.menu,
+                      color: const Color(0xFF475569),
+                      size: 22,
+                    ),
+                    onPressed: onMenuPressed,
+                  ),
+                ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
             ],
 
             // Logo OrgaFlow (only on desktop, left of search bar)

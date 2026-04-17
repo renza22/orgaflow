@@ -298,9 +298,10 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour >= 4 && hour < 12) return "🌤️ Selamat Siang";
-    if (hour >= 12 && hour < 18) return "☀️ Selamat Siang";
-    return "🌙 Selamat Malam";
+    if (hour >= 5 && hour < 12) return "Selamat Pagi";
+    if (hour >= 12 && hour < 15) return "Selamat Siang";
+    if (hour >= 15 && hour < 18) return "Selamat Sore";
+    return "Selamat Malam";
   }
 
   int get _totalPendingTasks =>
@@ -322,7 +323,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: Colors.white,
       appBar: EnhancedAppBar(
         showMenuButton: isSmallScreen || isMediumScreen,
         onMenuPressed: () {
@@ -331,34 +332,34 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       ),
       drawer: (isSmallScreen || isMediumScreen)
           ? Drawer(
-              child: ResponsiveSidebar(currentRoute: '/'),
+              child: ResponsiveSidebar(currentRoute: '/dashboard'),
             )
           : null,
       body: Row(
         children: [
           // Sidebar for desktop
           if (!isSmallScreen && !isMediumScreen)
-            const ResponsiveSidebar(currentRoute: '/'),
+            const ResponsiveSidebar(currentRoute: '/dashboard'),
 
           // Main Content
           Expanded(
             child: SafeArea(
               child: SingleChildScrollView(
-                padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+                padding: EdgeInsets.all(isSmallScreen ? 16 : 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Header Section
                     _buildHeader(isSmallScreen),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 32),
 
                     // Summary Cards
                     _buildSummaryCards(isSmallScreen),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 40),
 
                     // Project List Header
                     _buildProjectListHeader(isSmallScreen),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // Project Grid
                     _buildProjectGrid(),
@@ -374,102 +375,151 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
 
   Widget _buildHeader(bool isSmallScreen) {
     final organizationName = _sessionContext?.organization?.name;
+    final userName = _sessionContext?.profile?.fullName ?? 'User';
+    final userRole = _sessionContext?.activeMember?.role;
+    
+    // Map role to Indonesian display name
+    String getRoleDisplayName(String? role) {
+      if (role == null) return 'Anggota';
+      switch (role.toLowerCase()) {
+        case 'owner':
+          return 'Ketua Umum';
+        case 'admin':
+          return 'Administrator';
+        case 'member':
+          return 'Anggota';
+        default:
+          return role;
+      }
+    }
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Logo and Greeting
-        GestureDetector(
-          onTap: _canEditOrganizationLogo ? _handleOrganizationLogoTap : null,
-          child: Container(
-            width: isSmallScreen ? 40 : 56,
-            height: isSmallScreen ? 40 : 56,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(12),
+        Row(
+          children: [
+            // Logo
+            GestureDetector(
+              onTap: _canEditOrganizationLogo ? _handleOrganizationLogoTap : null,
+              child: Container(
+                width: isSmallScreen ? 48 : 64,
+                height: isSmallScreen ? 48 : 64,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade300, width: 2),
+                ),
+                child: _buildOrganizationLogoContent(),
+              ),
             ),
-            child: _buildOrganizationLogoContent(),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _getGreeting(),
-                style: TextStyle(
-                  fontSize: isSmallScreen ? 14 : 16,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF6C5CE7),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                organizationName == null || organizationName.trim().isEmpty
-                    ? 'Himpunan Mahasiswa Teknik Informatika'
-                    : organizationName,
-                style: TextStyle(
-                  fontSize: isSmallScreen ? 16 : 20,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Administrator: Admin User',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Clock and Date
-        if (!isSmallScreen) ...[
-          const SizedBox(width: 24),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Row(
+            const SizedBox(width: 16),
+            // Greeting and Organization Name
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.calendar_today,
-                      size: 16, color: Colors.grey.shade600),
-                  const SizedBox(width: 8),
                   Text(
-                    _getCurrentDate(),
+                    '${_getGreeting()},',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade700,
-                      fontWeight: FontWeight.w500,
+                      fontSize: isSmallScreen ? 14 : 16,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF6C5CE7),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    organizationName == null || organizationName.trim().isEmpty
+                        ? 'Himpunan Mahasiswa Teknik Informatika'
+                        : organizationName,
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 18 : 24,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${getRoleDisplayName(userRole)}: $userName',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              // Digital Clock
+            ),
+            // Clock and Date
+            if (!isSmallScreen) ...[
+              const SizedBox(width: 24),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6C5CE7),
-                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
                 ),
-                child: Text(
-                  _currentTime,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
+                child: Row(
+                  children: [
+                    Text(
+                      _getCurrentDateShort(),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
+                          const SizedBox(width: 6),
+                          Text(
+                            _currentTime,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade800,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
-          ),
-        ],
+          ],
+        ),
       ],
     );
+  }
+
+  String _getCurrentDateShort() {
+    final now = DateTime.now();
+    final days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des'
+    ];
+    return '${days[now.weekday % 7]}, ${now.day} ${months[now.month - 1]} ${now.year}';
   }
 
   String _getCurrentDate() {
@@ -810,6 +860,353 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     );
   }
 
+  void _showEditProjectDialog(Project project) {
+    final nameController = TextEditingController(text: project.name);
+    final descController = TextEditingController(text: project.description);
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          width: 500,
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Edit Proyek',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Nama Proyek',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  hintText: 'Contoh: Inaugurasi 2024',
+                  hintStyle: TextStyle(color: Colors.grey.shade400),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide:
+                        const BorderSide(color: Color(0xFF6C5CE7), width: 2),
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Deskripsi',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: descController,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  hintText: 'Jelaskan tujuan dan detail proyek',
+                  hintStyle: TextStyle(color: Colors.grey.shade400),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide:
+                        const BorderSide(color: Color(0xFF6C5CE7), width: 2),
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 32),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                    ),
+                    child: const Text(
+                      'Batal',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (nameController.text.isNotEmpty &&
+                          descController.text.isNotEmpty) {
+                        // TODO: Update project in database
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Proyek berhasil diupdate!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                        Navigator.pop(context);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Mohon lengkapi semua field'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6C5CE7),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 32, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Simpan Perubahan',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteProjectDialog(Project project) {
+    final confirmController = TextEditingController();
+    bool isConfirmValid = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Container(
+              width: 450,
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.red,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Text(
+                          'Hapus Project',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Apakah Anda yakin ingin menghapus project "${project.name}"?',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline,
+                            color: Colors.red, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Tindakan ini tidak dapat dibatalkan. Semua data project akan dihapus permanen.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.red.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Ketik "hapus" untuk konfirmasi',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: confirmController,
+                    onChanged: (value) {
+                      setDialogState(() {
+                        isConfirmValid = value.toLowerCase() == 'hapus';
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'hapus',
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Colors.red, width: 2),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
+                        ),
+                        child: const Text(
+                          'Batal',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: isConfirmValid
+                            ? () {
+                                setState(() {
+                                  _projects.remove(project);
+                                });
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        'Project "${project.name}" berhasil dihapus'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          disabledForegroundColor: Colors.grey.shade500,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 32, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Hapus Project',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildSummaryCards(bool isSmallScreen) {
     if (isSmallScreen) {
       return Column(
@@ -881,6 +1278,11 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
   }
 
   Widget _buildProjectListHeader(bool isSmallScreen) {
+    final userRole = _sessionContext?.activeMember?.role;
+    final canAddProject = userRole == 'owner' || 
+                          userRole == 'admin' || 
+                          userRole == 'ketua_divisi';
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -890,70 +1292,121 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
             const Text(
               'Daftar Proyek',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 22,
                 fontWeight: FontWeight.w700,
+                color: Color(0xFF1F2937),
               ),
             ),
             const SizedBox(height: 4),
             Text(
               'Klik proyek untuk masuk ke Kanban Board',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 14,
                 color: Colors.grey.shade600,
               ),
             ),
           ],
         ),
-        Row(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.grid_view,
-                      color:
-                          _isGridView ? const Color(0xFF6C5CE7) : Colors.grey,
-                      size: 20,
-                    ),
-                    onPressed: () => setState(() => _isGridView = true),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.view_list,
-                      color:
-                          !_isGridView ? const Color(0xFF6C5CE7) : Colors.grey,
-                      size: 20,
-                    ),
-                    onPressed: () => setState(() => _isGridView = false),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            ElevatedButton.icon(
-              onPressed: () => _showAddProjectDialog(),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Tambah Proyek'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C5CE7),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
+        if (!isSmallScreen && canAddProject)
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300),
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.grid_view_rounded,
+                        color: _isGridView
+                            ? const Color(0xFF6C5CE7)
+                            : Colors.grey.shade500,
+                        size: 20,
+                      ),
+                      onPressed: () => setState(() => _isGridView = true),
+                      tooltip: 'Grid View',
+                    ),
+                    Container(
+                      width: 1,
+                      height: 20,
+                      color: Colors.grey.shade300,
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.view_list_rounded,
+                        color: !_isGridView
+                            ? const Color(0xFF6C5CE7)
+                            : Colors.grey.shade500,
+                        size: 20,
+                      ),
+                      onPressed: () => setState(() => _isGridView = false),
+                      tooltip: 'List View',
+                    ),
+                  ],
                 ),
               ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: () => _showAddProjectDialog(),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Tambah Proyek'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C5CE7),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ],
+          ),
+        if (!isSmallScreen && !canAddProject)
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey.shade300),
             ),
-          ],
-        ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(
+                    Icons.grid_view_rounded,
+                    color: _isGridView
+                        ? const Color(0xFF6C5CE7)
+                        : Colors.grey.shade500,
+                    size: 20,
+                  ),
+                  onPressed: () => setState(() => _isGridView = true),
+                  tooltip: 'Grid View',
+                ),
+                Container(
+                  width: 1,
+                  height: 20,
+                  color: Colors.grey.shade300,
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.view_list_rounded,
+                    color: !_isGridView
+                        ? const Color(0xFF6C5CE7)
+                        : Colors.grey.shade500,
+                    size: 20,
+                  ),
+                  onPressed: () => setState(() => _isGridView = false),
+                  tooltip: 'List View',
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -1068,6 +1521,38 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     Color color,
     String subtitle,
   ) {
+    // Define gradient colors based on the card type
+    List<Color> gradientColors;
+    Color iconBgColor;
+    Color borderColor;
+    
+    if (title == 'Ringkasan Proyek') {
+      gradientColors = [
+        const Color(0xFFE9E4FF), // Light purple at top-left
+        const Color(0xFFF5F3FF), // Medium light purple
+        Colors.white,            // White at bottom-right
+      ];
+      iconBgColor = const Color(0xFFDDD6FE);
+      borderColor = const Color(0xFFDDD6FE);
+    } else if (title == 'Task Pending') {
+      gradientColors = [
+        const Color(0xFFCCFBF1), // Light cyan at top-left
+        const Color(0xFFE0F2FE), // Medium light cyan
+        Colors.white,            // White at bottom-right
+      ];
+      iconBgColor = const Color(0xFFAFECEF);
+      borderColor = const Color(0xFFAFECEF);
+    } else {
+      // Quick Alert
+      gradientColors = [
+        const Color(0xFFFFE4E6), // Light red/pink at top-left
+        const Color(0xFFFEF2F2), // Medium light pink
+        Colors.white,            // White at bottom-right
+      ];
+      iconBgColor = const Color(0xFFFECDD3);
+      borderColor = const Color(0xFFFECDD3);
+    }
+
     return InkWell(
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1077,13 +1562,25 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
           ),
         );
       },
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: gradientColors,
+            stops: const [0.0, 0.5, 1.0],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1100,32 +1597,33 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: Colors.grey.shade700,
+                          color: Colors.grey.shade600,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       Text(
                         value,
-                        style: const TextStyle(
-                          fontSize: 36,
+                        style: TextStyle(
+                          fontSize: 40,
                           fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade900,
                         ),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
+                    color: iconBgColor,
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(icon, color: color, size: 24),
+                  child: Icon(icon, color: color, size: 28),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Container(
@@ -1156,6 +1654,9 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
   }
 
   Widget _buildProjectCard(Project project) {
+    final userRole = _sessionContext?.activeMember?.role;
+    final canDelete = userRole == 'owner' || userRole == 'admin';
+
     return InkWell(
       onTap: () {
         Navigator.push(
@@ -1168,17 +1669,17 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
           ),
         );
       },
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
@@ -1194,43 +1695,91 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                   height: 56,
                   decoration: BoxDecoration(
                     color: project.color,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(project.icon, color: Colors.white, size: 28),
                 ),
-                if (project.isUrgent || project.isOverdue)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.warning_amber_rounded,
-                            size: 12, color: Colors.white),
-                        const SizedBox(width: 4),
-                        Text(
-                          project.isOverdue ? 'Overdue' : 'Urgent',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                Row(
+                  children: [
+                    if (project.isUrgent || project.isOverdue)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.warning_amber_rounded,
+                                size: 14, color: Colors.red.shade600),
+                            const SizedBox(width: 4),
+                            Text(
+                              project.isOverdue ? 'Overdue' : 'Urgent',
+                              style: TextStyle(
+                                color: Colors.red.shade600,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(width: 4),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_vert, color: Colors.grey.shade600, size: 20),
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _showEditProjectDialog(project);
+                        } else if (value == 'delete') {
+                          _showDeleteProjectDialog(project);
+                        }
+                      },
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined, color: Color(0xFF6C5CE7), size: 20),
+                              SizedBox(width: 12),
+                              Text(
+                                'Edit Project',
+                                style: TextStyle(color: Color(0xFF6C5CE7), fontSize: 14),
+                              ),
+                            ],
                           ),
                         ),
+                        if (canDelete)
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Hapus Project',
+                                  style: TextStyle(color: Colors.red, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
-                  ),
+                  ],
+                ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Text(
               project.name,
               style: const TextStyle(
                 fontSize: 18,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1F2937),
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -1239,83 +1788,43 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
             Text(
               project.description,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 14,
                 color: Colors.grey.shade600,
+                height: 1.4,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Progress',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 Text(
                   '${project.progress}%',
                   style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1F2937),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(6),
               child: LinearProgressIndicator(
                 value: project.progress / 100,
                 backgroundColor: Colors.grey.shade200,
                 color: project.color,
                 minHeight: 8,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '${project.completedTasks} / ${project.totalTasks} task selesai',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.only(top: 16),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: Colors.grey.shade200)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.calendar_today,
-                          size: 16, color: Colors.grey.shade600),
-                      const SizedBox(width: 8),
-                      Text(
-                        project.deadlineLabel,
-                        style: TextStyle(
-                            fontSize: 13, color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    project.deadlineStatusLabel,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: project.isOverdue
-                          ? Colors.red
-                          : project.isUrgent
-                              ? Colors.orange
-                              : project.deadline == null
-                                  ? Colors.grey.shade600
-                                  : Colors.green,
-                    ),
-                  ),
-                ],
               ),
             ),
           ],
