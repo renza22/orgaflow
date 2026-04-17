@@ -10,6 +10,9 @@ class ProjectModel {
     required this.createdBy,
     this.createdAt,
     this.updatedAt,
+    this.totalTasks = 0,
+    this.completedTasks = 0,
+    this.memberCount = 0,
   });
 
   final String id;
@@ -22,6 +25,17 @@ class ProjectModel {
   final String createdBy;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final int totalTasks;
+  final int completedTasks;
+  final int memberCount;
+
+  int get progress {
+    if (totalTasks == 0) {
+      return 0;
+    }
+
+    return ((completedTasks / totalTasks) * 100).round();
+  }
 
   factory ProjectModel.fromJson(Map<String, dynamic> json) {
     return ProjectModel(
@@ -35,6 +49,41 @@ class ProjectModel {
       createdBy: json['created_by'] as String? ?? '',
       createdAt: _parseDateTime(json['created_at']),
       updatedAt: _parseDateTime(json['updated_at']),
+      totalTasks: (json['total_tasks'] as num?)?.toInt() ?? 0,
+      completedTasks: (json['completed_tasks'] as num?)?.toInt() ?? 0,
+      memberCount: (json['member_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  ProjectModel copyWith({
+    String? id,
+    String? organizationId,
+    String? name,
+    String? description,
+    String? status,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? createdBy,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    int? totalTasks,
+    int? completedTasks,
+    int? memberCount,
+  }) {
+    return ProjectModel(
+      id: id ?? this.id,
+      organizationId: organizationId ?? this.organizationId,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      status: status ?? this.status,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      totalTasks: totalTasks ?? this.totalTasks,
+      completedTasks: completedTasks ?? this.completedTasks,
+      memberCount: memberCount ?? this.memberCount,
     );
   }
 

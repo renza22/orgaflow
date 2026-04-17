@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
-import '../../models/project_detail_model.dart';
-import 'project_board_page.dart';
+
+import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
+import '../../../project/presentation/presenters/projects_presenter.dart';
+import '../../models/project_detail_model.dart';
+import 'project_board_page.dart';
+
+enum _ProjectCardAction { edit, delete }
+
+enum _ProjectDialogResult { created, updated }
 
 class ProjectsPage extends StatefulWidget {
   const ProjectsPage({super.key});
@@ -11,85 +18,522 @@ class ProjectsPage extends StatefulWidget {
   State<ProjectsPage> createState() => _ProjectsPageState();
 }
 
-class _ProjectsPageState extends State<ProjectsPage> {
+class _ProjectsPageState extends State<ProjectsPage> with RouteAware {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  
-  final List<ProjectDetail> _projects = [
-    ProjectDetail(
-      id: 1,
-      name: "Website Redesign",
-      description: "Complete overhaul of the organization's website with modern UI/UX",
-      progress: 65,
-      status: ProjectStatus.active,
-      members: 8,
-      tasks: TaskCount(total: 24, completed: 16),
-      dueDate: "Mar 30, 2026",
-      color: const Color(0xFF6C5CE7),
-    ),
-    ProjectDetail(
-      id: 2,
-      name: "Mobile App Launch",
-      description: "Develop and launch iOS and Android applications",
-      progress: 42,
-      status: ProjectStatus.active,
-      members: 12,
-      tasks: TaskCount(total: 45, completed: 19),
-      dueDate: "Apr 15, 2026",
-      color: const Color(0xFF00CEC9),
-    ),
-    ProjectDetail(
-      id: 3,
-      name: "Marketing Campaign Q2",
-      description: "Plan and execute social media and content marketing strategy",
-      progress: 28,
-      status: ProjectStatus.planning,
-      members: 6,
-      tasks: TaskCount(total: 18, completed: 5),
-      dueDate: "May 1, 2026",
-      color: const Color(0xFF00B894),
-    ),
-    ProjectDetail(
-      id: 4,
-      name: "Database Migration",
-      description: "Migrate all systems to new cloud infrastructure",
-      progress: 100,
-      status: ProjectStatus.completed,
-      members: 5,
-      tasks: TaskCount(total: 12, completed: 12),
-      dueDate: "Mar 8, 2026",
-      color: const Color(0xFFFFCB6E),
-    ),
-    ProjectDetail(
-      id: 5,
-      name: "AI Integration",
-      description: "Implement AI-powered features across the platform",
-      progress: 15,
-      status: ProjectStatus.planning,
-      members: 10,
-      tasks: TaskCount(total: 32, completed: 5),
-      dueDate: "Jun 20, 2026",
-      color: const Color(0xFFFF7675),
-    ),
-    ProjectDetail(
-      id: 6,
-      name: "Security Audit",
-      description: "Comprehensive security review and penetration testing",
-      progress: 88,
-      status: ProjectStatus.active,
-      members: 4,
-      tasks: TaskCount(total: 15, completed: 13),
-      dueDate: "Mar 25, 2026",
-      color: const Color(0xFF6C5CE7),
-    ),
-  ];
+  final ProjectsPresenter _presenter = ProjectsPresenter();
+
+  ModalRoute<dynamic>? _route;
+  List<ProjectDetail> _projects = const [];
+  bool _isLoading = true;
+  bool _canManageProjects = false;
+  String? _errorMessage;
 
   int get _totalProjects => _projects.length;
-  int get _activeProjects => _projects.where((p) => p.status == ProjectStatus.active).length;
-  int get _totalTasks => _projects.fold(0, (sum, p) => sum + p.tasks.total);
+
+  int get _activeProjects => _projects
+      .where((project) => project.status == ProjectStatus.active)
+      .length;
+
+  int get _totalTasks =>
+      _projects.fold(0, (sum, project) => sum + project.tasks.total);
+
   int get _avgCompletion {
-    if (_projects.isEmpty) return 0;
-    final total = _projects.fold(0, (sum, p) => sum + p.progress);
-    return (total / _projects.length).round();
+    if (_projects.isEmpty) {
+      return 0;
+    }
+
+    final totalProgress =
+        _projects.fold(0, (sum, project) => sum + project.progress);
+    return (totalProgress / _projects.length).round();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProjects();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final route = ModalRoute.of(context);
+    if (route == null || route == _route) {
+      return;
+    }
+
+    if (_route != null) {
+      appRouteObserver.unsubscribe(this);
+    }
+
+    _route = route;
+    appRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPopNext() {
+    _loadProjects();
+  }
+
+  @override
+  void dispose() {
+    appRouteObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  Future<bool> _loadProjects() async {
+    final previousProjects = List<ProjectDetail>.from(_projects);
+
+    setState(() {
+      _isLoading = true;
+      if (previousProjects.isEmpty) {
+        _errorMessage = null;
+      }
+    });
+
+    final fetchProjectsFuture = _presenter.fetchProjects();
+    final canManageFuture = _presenter.canManageProjects();
+
+    final projectResult = await fetchProjectsFuture;
+    final canManageProjects = await canManageFuture;
+
+    if (!mounted) {
+      return false;
+    }
+
+    if (projectResult.isFailure) {
+      setState(() {
+        _projects = previousProjects;
+        _canManageProjects = canManageProjects;
+        _isLoading = false;
+        _errorMessage =
+            previousProjects.isEmpty ? projectResult.error!.message : null;
+      });
+      return false;
+    }
+
+    setState(() {
+      _projects = projectResult.data!
+          .map((project) => ProjectDetail.fromProjectModel(project))
+          .toList();
+      _canManageProjects = canManageProjects;
+      _isLoading = false;
+      _errorMessage = null;
+    });
+
+    return true;
+  }
+
+  void _showSnackBar(
+    String message, {
+    Color? backgroundColor,
+  }) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+      ),
+    );
+  }
+
+  void _openProjectBoard(ProjectDetail project) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProjectBoardPage(
+          projectId: project.id,
+          projectName: project.name,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showProjectDialog({
+    ProjectDetail? project,
+  }) async {
+    if (!_canManageProjects) {
+      return;
+    }
+
+    final isEditing = project != null;
+    final nameController = TextEditingController(text: project?.name ?? '');
+    final descController = TextEditingController(
+      text: project?.description == '-' ? '' : project?.description ?? '',
+    );
+    DateTime? selectedDate = project?.dueDate;
+    var isSubmitting = false;
+
+    final dialogResult = await showDialog<_ProjectDialogResult>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> submitProject() async {
+              final name = nameController.text.trim();
+              final description = descController.text.trim();
+              final isValid = name.isNotEmpty &&
+                  description.isNotEmpty &&
+                  (selectedDate != null || isEditing);
+
+              if (!isValid) {
+                _showSnackBar(
+                  'Mohon lengkapi semua field',
+                  backgroundColor: Colors.red,
+                );
+                return;
+              }
+
+              setDialogState(() {
+                isSubmitting = true;
+              });
+
+              final result = isEditing
+                  ? await _presenter.updateProject(
+                      projectId: project.id,
+                      name: name,
+                      description: description,
+                      endDate: selectedDate,
+                    )
+                  : await _presenter.createProject(
+                      name: name,
+                      description: description,
+                      endDate: selectedDate,
+                    );
+
+              if (!mounted || !dialogContext.mounted) {
+                return;
+              }
+
+              if (result.isFailure) {
+                setDialogState(() {
+                  isSubmitting = false;
+                });
+                _showSnackBar(
+                  result.error!.message,
+                  backgroundColor: Colors.red,
+                );
+                return;
+              }
+
+              Navigator.of(dialogContext).pop(
+                isEditing
+                    ? _ProjectDialogResult.updated
+                    : _ProjectDialogResult.created,
+              );
+            }
+
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                width: 500,
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isEditing ? 'Edit Proyek' : 'Buat Proyek Baru',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: isSubmitting
+                              ? null
+                              : () => Navigator.pop(dialogContext),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Nama Proyek',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: nameController,
+                      decoration: _buildDialogInputDecoration(
+                        hintText: 'Contoh: Inaugurasi 2024',
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Deskripsi',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: descController,
+                      maxLines: 4,
+                      decoration: _buildDialogInputDecoration(
+                        hintText: 'Jelaskan tujuan dan detail proyek',
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Deadline Proyek',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: isSubmitting
+                          ? null
+                          : () async {
+                              final now = DateTime.now();
+                              final firstDate = selectedDate != null &&
+                                      selectedDate!.isBefore(now)
+                                  ? DateTime(
+                                      selectedDate!.year,
+                                      selectedDate!.month,
+                                      selectedDate!.day,
+                                    )
+                                  : DateTime(now.year, now.month, now.day);
+                              final initialDate = selectedDate ?? firstDate;
+                              final date = await showDatePicker(
+                                context: dialogContext,
+                                initialDate: initialDate,
+                                firstDate: firstDate,
+                                lastDate: DateTime(2030),
+                                builder: (context, child) {
+                                  return Theme(
+                                    data: Theme.of(context).copyWith(
+                                      colorScheme: const ColorScheme.light(
+                                        primary: Color(0xFF6C5CE7),
+                                      ),
+                                    ),
+                                    child: child!,
+                                  );
+                                },
+                              );
+
+                              if (date != null && dialogContext.mounted) {
+                                setDialogState(() {
+                                  selectedDate = date;
+                                });
+                              }
+                            },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.calendar_today,
+                              size: 20,
+                              color: Colors.grey.shade600,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              selectedDate != null
+                                  ? _formatDialogDate(selectedDate!)
+                                  : 'dd/mm/yyyy',
+                              style: TextStyle(
+                                color: selectedDate != null
+                                    ? Colors.black
+                                    : Colors.grey.shade400,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () => Navigator.pop(dialogContext),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                          ),
+                          child: const Text(
+                            'Batal',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: isSubmitting ? null : submitProject,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6C5CE7),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: Text(
+                            isEditing ? 'Simpan Perubahan' : 'Buat Proyek',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    nameController.dispose();
+    descController.dispose();
+
+    if (dialogResult == null) {
+      return;
+    }
+
+    final refreshed = await _loadProjects();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!refreshed) {
+      _showSnackBar(
+        'Proyek berhasil disimpan, tetapi daftar gagal dimuat ulang.',
+        backgroundColor: Colors.orange,
+      );
+      return;
+    }
+
+    _showSnackBar(
+      dialogResult == _ProjectDialogResult.updated
+          ? 'Proyek berhasil diperbarui!'
+          : 'Proyek berhasil ditambahkan!',
+      backgroundColor: Colors.green,
+    );
+  }
+
+  Future<void> _confirmDeleteProject(ProjectDetail project) async {
+    if (!_canManageProjects) {
+      return;
+    }
+
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Hapus Proyek'),
+          content: Text('Apakah Anda yakin ingin menghapus ${project.name}?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Hapus'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) {
+      return;
+    }
+
+    final result = await _presenter.deleteProject(project.id);
+    if (!mounted) {
+      return;
+    }
+
+    if (result.isFailure) {
+      _showSnackBar(
+        result.error!.message,
+        backgroundColor: Colors.red,
+      );
+      return;
+    }
+
+    await _loadProjects();
+    if (!mounted) {
+      return;
+    }
+
+    _showSnackBar(
+      'Proyek berhasil dihapus!',
+      backgroundColor: Colors.green,
+    );
+  }
+
+  InputDecoration _buildDialogInputDecoration({
+    required String hintText,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: TextStyle(color: Colors.grey.shade400),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(
+          color: Color(0xFF6C5CE7),
+          width: 2,
+        ),
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 12,
+      ),
+    );
+  }
+
+  String _formatDialogDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
   @override
@@ -114,18 +558,14 @@ class _ProjectsPageState extends State<ProjectsPage> {
           : null,
       body: Row(
         children: [
-          // Sidebar for desktop
           if (!isSmallScreen && !isMediumScreen)
             const ResponsiveSidebar(currentRoute: '/projects'),
-          
-          // Main Content
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -151,15 +591,18 @@ class _ProjectsPageState extends State<ProjectsPage> {
                           ],
                         ),
                       ),
-                      if (!isSmallScreen)
+                      if (!isSmallScreen && _canManageProjects)
                         ElevatedButton.icon(
-                          onPressed: _showAddProjectDialog,
+                          onPressed: () => _showProjectDialog(),
                           icon: const Icon(Icons.add, size: 18),
                           label: const Text('Tambah Projek'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF6C5CE7),
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -168,241 +611,22 @@ class _ProjectsPageState extends State<ProjectsPage> {
                     ],
                   ),
                   const SizedBox(height: 24),
-
-                  // Stats Cards
                   _buildStatsCards(isSmallScreen),
                   const SizedBox(height: 24),
-
-                  // Projects Grid
-                  _buildProjectsGrid(isSmallScreen),
+                  _buildProjectsGrid(),
                 ],
               ),
             ),
           ),
         ],
       ),
-      floatingActionButton: isSmallScreen
+      floatingActionButton: isSmallScreen && _canManageProjects
           ? FloatingActionButton(
-              onPressed: _showAddProjectDialog,
+              onPressed: () => _showProjectDialog(),
               backgroundColor: const Color(0xFF6C5CE7),
               child: const Icon(Icons.add),
             )
           : null,
-    );
-  }
-
-  void _showAddProjectDialog() {
-    final nameController = TextEditingController();
-    final descController = TextEditingController();
-    DateTime? selectedDate;
-
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Container(
-          width: 500,
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Buat Proyek Baru',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Nama Proyek',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  hintText: 'Contoh: Inaugurasi 2024',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFF6C5CE7), width: 2),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Deskripsi',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: descController,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Jelaskan tujuan dan detail proyek',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFF6C5CE7), width: 2),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Deadline Proyek',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              InkWell(
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime(2030),
-                    builder: (context, child) {
-                      return Theme(
-                        data: Theme.of(context).copyWith(
-                          colorScheme: const ColorScheme.light(
-                            primary: Color(0xFF6C5CE7),
-                          ),
-                        ),
-                        child: child!,
-                      );
-                    },
-                  );
-                  if (date != null) {
-                    setState(() {
-                      selectedDate = date;
-                    });
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_today, size: 20, color: Colors.grey.shade600),
-                      const SizedBox(width: 12),
-                      Text(
-                        selectedDate != null
-                            ? '${selectedDate!.day.toString().padLeft(2, '0')}/${selectedDate!.month.toString().padLeft(2, '0')}/${selectedDate!.year}'
-                            : 'dd/mm/yyyy',
-                        style: TextStyle(
-                          color: selectedDate != null ? Colors.black : Colors.grey.shade400,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    ),
-                    child: const Text(
-                      'Batal',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (nameController.text.isNotEmpty && 
-                          descController.text.isNotEmpty && 
-                          selectedDate != null) {
-                        // TODO: Add project logic here
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Proyek berhasil ditambahkan!'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                        Navigator.pop(context);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Mohon lengkapi semua field'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C5CE7),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Buat Proyek',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -412,7 +636,12 @@ class _ProjectsPageState extends State<ProjectsPage> {
         children: [
           _buildStatCard('Total Projects', '$_totalProjects', null, null),
           const SizedBox(height: 12),
-          _buildStatCard('Active', '$_activeProjects', const Color(0xFF6C5CE7), const Color(0xFF6C5CE7).withOpacity(0.05)),
+          _buildStatCard(
+            'Active',
+            '$_activeProjects',
+            const Color(0xFF6C5CE7),
+            const Color(0xFF6C5CE7).withValues(alpha: 0.05),
+          ),
           const SizedBox(height: 12),
           _buildStatCard('Total Tasks', '$_totalTasks', null, null),
           const SizedBox(height: 12),
@@ -423,25 +652,45 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
     return Row(
       children: [
-        Expanded(child: _buildStatCard('Total Projects', '$_totalProjects', null, null)),
+        Expanded(
+          child:
+              _buildStatCard('Total Projects', '$_totalProjects', null, null),
+        ),
         const SizedBox(width: 16),
-        Expanded(child: _buildStatCard('Active', '$_activeProjects', const Color(0xFF6C5CE7), const Color(0xFF6C5CE7).withOpacity(0.05))),
+        Expanded(
+          child: _buildStatCard(
+            'Active',
+            '$_activeProjects',
+            const Color(0xFF6C5CE7),
+            const Color(0xFF6C5CE7).withValues(alpha: 0.05),
+          ),
+        ),
         const SizedBox(width: 16),
-        Expanded(child: _buildStatCard('Total Tasks', '$_totalTasks', null, null)),
+        Expanded(
+          child: _buildStatCard('Total Tasks', '$_totalTasks', null, null),
+        ),
         const SizedBox(width: 16),
-        Expanded(child: _buildStatCard('Avg. Completion', '$_avgCompletion%', null, null)),
+        Expanded(
+          child:
+              _buildStatCard('Avg. Completion', '$_avgCompletion%', null, null),
+        ),
       ],
     );
   }
 
-  Widget _buildStatCard(String label, String value, Color? textColor, Color? bgColor) {
+  Widget _buildStatCard(
+    String label,
+    String value,
+    Color? textColor,
+    Color? bgColor,
+  ) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: bgColor ?? Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: textColor?.withOpacity(0.2) ?? Colors.grey.shade200,
+          color: textColor?.withValues(alpha: 0.2) ?? Colors.grey.shade200,
         ),
       ),
       child: Column(
@@ -468,10 +717,71 @@ class _ProjectsPageState extends State<ProjectsPage> {
     );
   }
 
-  Widget _buildProjectsGrid(bool isSmallScreen) {
+  Widget _buildProjectsGrid() {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 48),
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(48),
+          child: Column(
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: () => _loadProjects(),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.grey.shade300),
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text('Coba Lagi'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_projects.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(48),
+          child: Column(
+            children: [
+              Icon(Icons.folder_open, size: 64, color: Colors.grey.shade400),
+              const SizedBox(height: 16),
+              Text(
+                'Belum ada proyek',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        int crossAxisCount = 1;
+        var crossAxisCount = 1;
         if (constraints.maxWidth >= 1200) {
           crossAxisCount = 3;
         } else if (constraints.maxWidth >= 768) {
@@ -506,7 +816,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -515,24 +825,13 @@ class _ProjectsPageState extends State<ProjectsPage> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProjectBoardPage(
-                  projectId: project.id,
-                  projectName: project.name,
-                ),
-              ),
-            );
-          },
+          onTap: () => _openProjectBoard(project),
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header with Icon and Menu
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -554,21 +853,41 @@ class _ProjectsPageState extends State<ProjectsPage> {
                         ),
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(Icons.more_vert, color: Colors.grey.shade400),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Menu options')),
-                        );
-                      },
-                    ),
+                    if (_canManageProjects)
+                      PopupMenuButton<_ProjectCardAction>(
+                        icon: Icon(
+                          Icons.more_vert,
+                          color: Colors.grey.shade400,
+                        ),
+                        onSelected: (action) {
+                          switch (action) {
+                            case _ProjectCardAction.edit:
+                              _showProjectDialog(project: project);
+                              break;
+                            case _ProjectCardAction.delete:
+                              _confirmDeleteProject(project);
+                              break;
+                          }
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem<_ProjectCardAction>(
+                            value: _ProjectCardAction.edit,
+                            child: Text('Edit'),
+                          ),
+                          PopupMenuItem<_ProjectCardAction>(
+                            value: _ProjectCardAction.delete,
+                            child: Text('Hapus'),
+                          ),
+                        ],
+                      )
+                    else
+                      const SizedBox(width: 48, height: 48),
                   ],
                 ),
                 const SizedBox(height: 12),
-
-                // Status Badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: statusConfig.backgroundColor,
                     borderRadius: BorderRadius.circular(6),
@@ -583,8 +902,6 @@ class _ProjectsPageState extends State<ProjectsPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // Project Name
                 Text(
                   project.name,
                   style: const TextStyle(
@@ -593,8 +910,6 @@ class _ProjectsPageState extends State<ProjectsPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-
-                // Description
                 Text(
                   project.description,
                   style: TextStyle(
@@ -605,8 +920,6 @@ class _ProjectsPageState extends State<ProjectsPage> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 16),
-
-                // Progress Bar
                 Column(
                   children: [
                     Row(
@@ -641,14 +954,16 @@ class _ProjectsPageState extends State<ProjectsPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // Due Date and Members
                 Row(
                   children: [
-                    Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade600),
+                    Icon(
+                      Icons.calendar_today,
+                      size: 16,
+                      color: Colors.grey.shade600,
+                    ),
                     const SizedBox(width: 6),
                     Text(
-                      project.dueDate,
+                      project.dueDateLabel,
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey.shade600,
@@ -667,8 +982,6 @@ class _ProjectsPageState extends State<ProjectsPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // Tasks Count
                 RichText(
                   text: TextSpan(
                     style: TextStyle(
@@ -683,13 +996,13 @@ class _ProjectsPageState extends State<ProjectsPage> {
                           color: Colors.black,
                         ),
                       ),
-                      TextSpan(text: ' / ${project.tasks.total} tasks completed'),
+                      TextSpan(
+                        text: ' / ${project.tasks.total} tasks completed',
+                      ),
                     ],
                   ),
                 ),
                 const Spacer(),
-
-                // Action Buttons
                 Container(
                   padding: const EdgeInsets.only(top: 16),
                   decoration: BoxDecoration(
@@ -701,11 +1014,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Membuka Task Board ${project.name}')),
-                            );
-                          },
+                          onPressed: () => _openProjectBoard(project),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             side: BorderSide(color: Colors.grey.shade300),
@@ -725,9 +1034,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
                       const SizedBox(width: 8),
                       OutlinedButton.icon(
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Membuka DAG ${project.name}')),
-                          );
+                          _showSnackBar('Membuka DAG ${project.name}');
                         },
                         icon: const Icon(Icons.account_tree, size: 14),
                         label: const Text(
@@ -735,7 +1042,10 @@ class _ProjectsPageState extends State<ProjectsPage> {
                           style: TextStyle(fontSize: 13),
                         ),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           side: BorderSide(color: Colors.grey.shade300),
                           foregroundColor: Colors.black,
                           shape: RoundedRectangleBorder(

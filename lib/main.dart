@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/navigation/app_route_observer.dart';
 import 'features/auth/presentation/pages/auth_page.dart';
 import 'features/auth/presentation/pages/forgot_password_page.dart';
 import 'features/auth/presentation/pages/reset_password_page.dart';
@@ -34,6 +35,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'OrgaFlow',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [appRouteObserver],
       home: const SessionResolverPage(),
       routes: {
         '/auth': (context) => const AuthPage(),

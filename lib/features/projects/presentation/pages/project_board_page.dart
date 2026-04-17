@@ -4,7 +4,7 @@ import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
 
 class ProjectBoardPage extends StatefulWidget {
-  final int projectId;
+  final String projectId;
   final String projectName;
 
   const ProjectBoardPage({
@@ -19,8 +19,8 @@ class ProjectBoardPage extends StatefulWidget {
 
 class _ProjectBoardPageState extends State<ProjectBoardPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  
-  List<Task> _tasks = [
+
+  final List<Task> _tasks = [
     Task(
       id: 1,
       title: "Desain Banner Utama",
@@ -133,13 +133,6 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
     final isSmallScreen = screenWidth < 600;
     final isMediumScreen = screenWidth >= 600 && screenWidth < 1024;
 
-    // Debug: print task count
-    print('Total tasks: ${_tasks.length}');
-    for (var column in _columns) {
-      final tasks = _getTasksByStatus(column.status);
-      print('${column.title}: ${tasks.length} tasks');
-    }
-
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.grey.shade50,
@@ -161,7 +154,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
           // Sidebar for desktop
           if (!isSmallScreen && !isMediumScreen)
             const ResponsiveSidebar(currentRoute: '/projects'),
-          
+
           // Main Content
           Expanded(
             child: Column(
@@ -182,7 +175,8 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                         OutlinedButton.icon(
                           onPressed: () {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Membuka Dependency Graph')),
+                              const SnackBar(
+                                  content: Text('Membuka Dependency Graph')),
                             );
                           },
                           icon: const Icon(Icons.account_tree, size: 16),
@@ -266,7 +260,8 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                         ),
                         const Spacer(),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.grey.shade200,
                             borderRadius: BorderRadius.circular(12),
@@ -286,7 +281,8 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                   // Column Body
                   Expanded(
                     child: DragTarget<Task>(
-                      onWillAcceptWithDetails: (details) => details.data.status != column.status,
+                      onWillAcceptWithDetails: (details) =>
+                          details.data.status != column.status,
                       onAcceptWithDetails: (details) {
                         _moveTask(details.data.id, column.status);
                       },
@@ -296,7 +292,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             color: isHovering
-                                ? Color(column.color).withOpacity(0.1)
+                                ? Color(column.color).withValues(alpha: 0.1)
                                 : Colors.grey.shade100,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
@@ -323,7 +319,8 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                                   shrinkWrap: true,
                                   itemCount: tasks.length,
                                   itemBuilder: (context, index) {
-                                    return _buildTaskCard(tasks[index], column.color);
+                                    return _buildTaskCard(
+                                        tasks[index], column.color);
                                   },
                                 ),
                         );
@@ -377,7 +374,8 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                           ),
                           const Spacer(),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: Colors.grey.shade200,
                               borderRadius: BorderRadius.circular(12),
@@ -397,7 +395,8 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                     // Column Body
                     Expanded(
                       child: DragTarget<Task>(
-                        onWillAcceptWithDetails: (details) => details.data.status != column.status,
+                        onWillAcceptWithDetails: (details) =>
+                            details.data.status != column.status,
                         onAcceptWithDetails: (details) {
                           _moveTask(details.data.id, column.status);
                         },
@@ -407,7 +406,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
                               color: isHovering
-                                  ? Color(column.color).withOpacity(0.1)
+                                  ? Color(column.color).withValues(alpha: 0.1)
                                   : Colors.grey.shade100,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
@@ -434,7 +433,8 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                                     shrinkWrap: true,
                                     itemCount: tasks.length,
                                     itemBuilder: (context, index) {
-                                      return _buildTaskCard(tasks[index], column.color);
+                                      return _buildTaskCard(
+                                          tasks[index], column.color);
                                     },
                                   ),
                           );
@@ -457,7 +457,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
       feedback: Material(
         elevation: 8,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
+        child: SizedBox(
           width: 280,
           child: Opacity(
             opacity: 0.8,
@@ -487,7 +487,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -501,7 +501,8 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
             // Title with drag handle
             Row(
               children: [
-                Icon(Icons.drag_indicator, size: 16, color: Colors.grey.shade300),
+                Icon(Icons.drag_indicator,
+                    size: 16, color: Colors.grey.shade300),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -539,7 +540,8 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
               child: Row(
                 children: [
                   if (task.dependencies.isNotEmpty) ...[
-                    Icon(Icons.account_tree, size: 12, color: Colors.orange.shade700),
+                    Icon(Icons.account_tree,
+                        size: 12, color: Colors.orange.shade700),
                     const SizedBox(width: 4),
                     Text(
                       '${task.dependencies.length} deps',
@@ -550,7 +552,8 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                     ),
                     const SizedBox(width: 12),
                   ],
-                  Icon(Icons.access_time, size: 12, color: Colors.grey.shade600),
+                  Icon(Icons.access_time,
+                      size: 12, color: Colors.grey.shade600),
                   const SizedBox(width: 4),
                   Text(
                     '${task.estimatedHours}h',
@@ -573,7 +576,8 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                   runSpacing: 4,
                   children: task.skills.map((skill) {
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(4),
@@ -607,10 +611,14 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
                           width: 20,
                           height: 20,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF6C5CE7).withOpacity(0.1),
+                            color: const Color(0xFF6C5CE7).withValues(
+                              alpha: 0.1,
+                            ),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: const Color(0xFF6C5CE7).withOpacity(0.2),
+                              color: const Color(0xFF6C5CE7).withValues(
+                                alpha: 0.2,
+                              ),
                             ),
                           ),
                           child: Center(
@@ -661,7 +669,6 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
   }
 }
 
-
 class _AddTaskDialog extends StatefulWidget {
   final List<Task> existingTasks;
   final Function(Task) onAddTask;
@@ -695,8 +702,8 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
     "Frontend",
   ];
 
-  List<String> _selectedSkills = [];
-  List<int> _selectedDependencies = [];
+  final List<String> _selectedSkills = [];
+  final List<int> _selectedDependencies = [];
   String _skillSearch = '';
 
   @override
@@ -718,7 +725,10 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
 
     final newTask = Task(
       id: widget.existingTasks.isNotEmpty
-          ? widget.existingTasks.map((t) => t.id).reduce((a, b) => a > b ? a : b) + 1
+          ? widget.existingTasks
+                  .map((t) => t.id)
+                  .reduce((a, b) => a > b ? a : b) +
+              1
           : 1,
       title: _titleController.text,
       description: _descriptionController.text,
@@ -1071,7 +1081,8 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
                               itemBuilder: (context, index) {
                                 final task = widget.existingTasks[index];
                                 return CheckboxListTile(
-                                  value: _selectedDependencies.contains(task.id),
+                                  value:
+                                      _selectedDependencies.contains(task.id),
                                   onChanged: (value) {
                                     setState(() {
                                       if (value == true) {

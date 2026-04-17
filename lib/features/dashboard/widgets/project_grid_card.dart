@@ -11,21 +11,9 @@ class ProjectGridCard extends StatelessWidget {
     required this.onTap,
   });
 
-  String _formatDate(DateTime date) {
-    try {
-      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-      return '${date.day} ${months[date.month - 1]} ${date.year}';
-    } catch (e) {
-      print('Error formatting date: $e');
-      return 'Invalid date';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     try {
-      final daysLeft = project.getDaysUntilDeadline();
-
       return InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -36,7 +24,7 @@ class ProjectGridCard extends StatelessWidget {
             border: Border.all(color: Colors.grey.shade200),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -58,18 +46,7 @@ class ProjectGridCard extends StatelessWidget {
                         color: project.color,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: project.icon != null
-                          ? Icon(project.icon, color: Colors.white, size: 28)
-                          : Center(
-                              child: Text(
-                                project.name.isNotEmpty ? project.name[0].toUpperCase() : 'P',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
+                      child: Icon(project.icon, color: Colors.white, size: 28),
                     ),
                     if (project.isUrgent || project.isOverdue)
                       Container(
@@ -153,7 +130,8 @@ class ProjectGridCard extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: project.progress / 100,
                         backgroundColor: Colors.grey.shade200,
-                        valueColor: AlwaysStoppedAnimation<Color>(project.color),
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(project.color),
                         minHeight: 8,
                       ),
                     ),
@@ -187,7 +165,7 @@ class ProjectGridCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            _formatDate(project.deadline),
+                            project.deadlineLabel,
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.grey.shade600,
@@ -196,9 +174,7 @@ class ProjectGridCard extends StatelessWidget {
                         ],
                       ),
                       Text(
-                        project.isOverdue
-                            ? 'Terlambat'
-                            : '$daysLeft hari lagi',
+                        project.deadlineStatusLabel,
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -206,7 +182,9 @@ class ProjectGridCard extends StatelessWidget {
                               ? Colors.red
                               : project.isUrgent
                                   ? Colors.orange
-                                  : Colors.green,
+                                  : project.deadline == null
+                                      ? Colors.grey.shade600
+                                      : Colors.green,
                         ),
                       ),
                     ],
@@ -218,7 +196,6 @@ class ProjectGridCard extends StatelessWidget {
         ),
       );
     } catch (e) {
-      print('Error building ProjectGridCard: $e');
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(

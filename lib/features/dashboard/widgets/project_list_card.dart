@@ -11,15 +11,9 @@ class ProjectListCard extends StatelessWidget {
     required this.onTap,
   });
 
-  String _formatDate(DateTime date) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
-  }
-
   @override
   Widget build(BuildContext context) {
     try {
-      final daysLeft = project.getDaysUntilDeadline();
       final isSmallScreen = MediaQuery.of(context).size.width < 600;
 
       return InkWell(
@@ -32,7 +26,7 @@ class ProjectListCard extends StatelessWidget {
             border: Border.all(color: Colors.grey.shade200),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -40,14 +34,11 @@ class ProjectListCard extends StatelessWidget {
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: isSmallScreen
-                ? _buildMobileLayout(daysLeft)
-                : _buildDesktopLayout(daysLeft),
+            child: isSmallScreen ? _buildMobileLayout() : _buildDesktopLayout(),
           ),
         ),
       );
     } catch (e) {
-      print('Error building ProjectListCard: $e');
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -60,7 +51,7 @@ class ProjectListCard extends StatelessWidget {
     }
   }
 
-  Widget _buildMobileLayout(int daysLeft) {
+  Widget _buildMobileLayout() {
     return Column(
       children: [
         Row(
@@ -72,18 +63,7 @@ class ProjectListCard extends StatelessWidget {
                 color: project.color,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: project.icon != null
-                  ? Icon(project.icon, color: Colors.white, size: 20)
-                  : Center(
-                      child: Text(
-                        project.name[0].toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+              child: Icon(project.icon, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -194,7 +174,7 @@ class ProjectListCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      _formatDate(project.deadline),
+                      project.deadlineLabel,
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade600,
@@ -204,7 +184,7 @@ class ProjectListCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  project.isOverdue ? 'Terlambat' : '$daysLeft hari lagi',
+                  project.deadlineStatusLabel,
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -212,7 +192,9 @@ class ProjectListCard extends StatelessWidget {
                         ? Colors.red
                         : project.isUrgent
                             ? Colors.orange
-                            : Colors.green,
+                            : project.deadline == null
+                                ? Colors.grey.shade600
+                                : Colors.green,
                   ),
                 ),
               ],
@@ -223,7 +205,7 @@ class ProjectListCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDesktopLayout(int daysLeft) {
+  Widget _buildDesktopLayout() {
     return Row(
       children: [
         Container(
@@ -233,18 +215,7 @@ class ProjectListCard extends StatelessWidget {
             color: project.color,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: project.icon != null
-              ? Icon(project.icon, color: Colors.white, size: 20)
-              : Center(
-                  child: Text(
-                    project.name[0].toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+          child: Icon(project.icon, color: Colors.white, size: 20),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -354,7 +325,7 @@ class ProjectListCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    _formatDate(project.deadline),
+                    project.deadlineLabel,
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey.shade600,
@@ -364,7 +335,7 @@ class ProjectListCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                project.isOverdue ? 'Terlambat' : '$daysLeft hari lagi',
+                project.deadlineStatusLabel,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -372,7 +343,9 @@ class ProjectListCard extends StatelessWidget {
                       ? Colors.red
                       : project.isUrgent
                           ? Colors.orange
-                          : Colors.green,
+                          : project.deadline == null
+                              ? Colors.grey.shade600
+                              : Colors.green,
                 ),
               ),
             ],

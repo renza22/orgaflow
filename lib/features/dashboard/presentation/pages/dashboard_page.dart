@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/errors/error_mapper.dart';
+import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/session/session_context.dart';
 import '../../../../core/session/session_service.dart';
 import '../../../../core/supabase_config.dart';
 import '../../../../core/utils/message_helper.dart';
+import '../../../project/presentation/presenters/projects_presenter.dart';
 import '../../models/project_model.dart';
 import '../../../organization/data/repositories/organization_repository.dart';
 import '../../../projects/presentation/pages/project_board_page.dart';
@@ -21,7 +23,7 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> with RouteAware {
   static const String _organizationLogosBucket = 'organization-logos';
 
   bool _isGridView = true;
@@ -30,24 +32,53 @@ class _DashboardPageState extends State<DashboardPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final OrganizationRepository _organizationRepository =
       OrganizationRepository();
+  final ProjectsPresenter _projectsPresenter = ProjectsPresenter();
   final ImagePicker _imagePicker = ImagePicker();
   SessionContext? _sessionContext;
+  ModalRoute<dynamic>? _route;
+  List<Project> _projects = const [];
   bool _isLoadingSessionContext = false;
+  bool _isLoadingProjects = true;
   bool _isUploadingOrganizationLogo = false;
   int? _organizationLogoVersion;
+  String? _projectErrorMessage;
 
   @override
   void initState() {
     super.initState();
     _updateTime();
     unawaited(_loadSessionContext());
+    unawaited(_loadProjects());
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _updateTime();
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final route = ModalRoute.of(context);
+    if (route == null || route == _route) {
+      return;
+    }
+
+    if (_route != null) {
+      appRouteObserver.unsubscribe(this);
+    }
+
+    _route = route;
+    appRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPopNext() {
+    unawaited(_loadProjects());
+  }
+
+  @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _timer?.cancel();
     super.dispose();
   }
@@ -104,6 +135,48 @@ class _DashboardPageState extends State<DashboardPage> {
   bool get _canEditOrganizationLogo {
     final role = _sessionContext?.activeMember?.role;
     return role == 'owner' || role == 'admin';
+  }
+
+  Future<bool> _loadProjects() async {
+    final previousProjects = List<Project>.from(_projects);
+
+    setState(() {
+      _isLoadingProjects = true;
+      if (previousProjects.isEmpty) {
+        _projectErrorMessage = null;
+      }
+    });
+
+    final result = await _projectsPresenter.fetchProjects();
+
+    if (!mounted) {
+      return false;
+    }
+
+    if (result.isFailure) {
+      setState(() {
+        _projects = previousProjects;
+        _isLoadingProjects = false;
+        _projectErrorMessage =
+            previousProjects.isEmpty ? result.error!.message : null;
+      });
+
+      if (previousProjects.isNotEmpty) {
+        MessageHelper.showSnackBar(context, result.error!.message);
+      }
+
+      return false;
+    }
+
+    setState(() {
+      _projects = result.data!
+          .map((project) => Project.fromProjectModel(project))
+          .toList();
+      _isLoadingProjects = false;
+      _projectErrorMessage = null;
+    });
+
+    return true;
   }
 
   Future<void> _handleOrganizationLogoTap() async {
@@ -223,48 +296,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  final List<Project> _mockProjects = [
-    Project(
-      id: 1,
-      name: "Inagurasi PKKMB UNESA 5 2026",
-      description:
-          "Acara pelantikan pengurus baru organisasi mahasiswa periode 2024/2025",
-      deadline: DateTime(2026, 5, 15),
-      progress: 65,
-      totalTasks: 28,
-      completedTasks: 18,
-      pendingTasks: 10,
-      color: const Color(0xFF6C5CE7),
-      icon: Icons.school,
-    ),
-    Project(
-      id: 2,
-      name: "Seminar Nasional IT",
-      description:
-          "Seminar nasional tentang perkembangan teknologi informasi terkini",
-      deadline: DateTime(2026, 6, 20),
-      progress: 42,
-      totalTasks: 35,
-      completedTasks: 15,
-      pendingTasks: 20,
-      color: const Color(0xFF00CEC9),
-      icon: Icons.computer,
-    ),
-    Project(
-      id: 3,
-      name: "Kampanye Sosial Media",
-      description:
-          "Campaign branding dan promosi organisasi di platform digital",
-      deadline: DateTime(2026, 4, 30),
-      progress: 88,
-      totalTasks: 16,
-      completedTasks: 14,
-      pendingTasks: 2,
-      color: const Color(0xFF00B894),
-      icon: Icons.campaign,
-    ),
-  ];
-
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour >= 4 && hour < 12) return "🌤️ Selamat Siang";
@@ -273,31 +304,15 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   int get _totalPendingTasks =>
-      _mockProjects.fold(0, (sum, project) => sum + project.pendingTasks);
+      _projects.fold(0, (sum, project) => sum + project.pendingTasks);
 
-  List<Project> get _upcomingDeadlines => _mockProjects
-      .where((project) =>
-          project.getDaysUntilDeadline() <= 14 &&
-          project.getDaysUntilDeadline() > 0)
-      .toList();
+  int get _totalProjects => _projects.length;
 
-  String _formatDate(DateTime date) {
-    final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'Mei',
-      'Jun',
-      'Jul',
-      'Agu',
-      'Sep',
-      'Okt',
-      'Nov',
-      'Des'
-    ];
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
-  }
+  int get _activeProjects =>
+      _projects.where((project) => project.status == 'active').length;
+
+  List<Project> get _upcomingDeadlines =>
+      _projects.where((project) => project.hasUpcomingDeadline).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -346,7 +361,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     const SizedBox(height: 24),
 
                     // Project Grid
-                    _buildProjectGrid(isSmallScreen),
+                    _buildProjectGrid(),
                   ],
                 ),
               ),
@@ -485,225 +500,312 @@ class _DashboardPageState extends State<DashboardPage> {
     return '${days[now.weekday % 7]}, ${now.day} ${months[now.month - 1]} ${now.year}';
   }
 
-  void _showAddProjectDialog() {
+  Future<void> _showAddProjectDialog() async {
     final nameController = TextEditingController();
     final descController = TextEditingController();
     DateTime? selectedDate;
+    var isSubmitting = false;
 
-    showDialog(
+    final dialogResult = await showDialog<bool>(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Container(
-          width: 500,
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          Future<void> submitProject() async {
+            final name = nameController.text.trim();
+            final description = descController.text.trim();
+
+            if (name.isEmpty || description.isEmpty || selectedDate == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Mohon lengkapi semua field'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+
+            setDialogState(() {
+              isSubmitting = true;
+            });
+
+            final result = await _projectsPresenter.createProject(
+              name: name,
+              description: description,
+              endDate: selectedDate,
+            );
+
+            if (!mounted || !dialogContext.mounted) {
+              return;
+            }
+
+            if (result.isFailure) {
+              setDialogState(() {
+                isSubmitting = false;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(result.error!.message),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+
+            Navigator.pop(dialogContext, true);
+          }
+
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Container(
+              width: 500,
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Buat Proyek Baru',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: isSubmitting
+                            ? null
+                            : () => Navigator.pop(dialogContext),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
                   const Text(
-                    'Buat Proyek Baru',
+                    'Nama Proyek',
                     style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      hintText: 'Contoh: Inaugurasi 2024',
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF6C5CE7),
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Nama Proyek',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  hintText: 'Contoh: Inaugurasi 2024',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Deskripsi',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: descController,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText: 'Jelaskan tujuan dan detail proyek',
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF6C5CE7),
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide:
-                        const BorderSide(color: Color(0xFF6C5CE7), width: 2),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Deadline Proyek',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Deskripsi',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: descController,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Jelaskan tujuan dan detail proyek',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: isSubmitting
+                        ? null
+                        : () async {
+                            final date = await showDatePicker(
+                              context: dialogContext,
+                              initialDate: selectedDate ?? DateTime.now(),
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime(2030),
+                              builder: (context, child) {
+                                return Theme(
+                                  data: Theme.of(context).copyWith(
+                                    colorScheme: const ColorScheme.light(
+                                      primary: Color(0xFF6C5CE7),
+                                    ),
+                                  ),
+                                  child: child!,
+                                );
+                              },
+                            );
+
+                            if (date != null && dialogContext.mounted) {
+                              setDialogState(() {
+                                selectedDate = date;
+                              });
+                            }
+                          },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today,
+                            size: 20,
+                            color: Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            selectedDate != null
+                                ? '${selectedDate!.day.toString().padLeft(2, '0')}/${selectedDate!.month.toString().padLeft(2, '0')}/${selectedDate!.year}'
+                                : 'dd/mm/yyyy',
+                            style: TextStyle(
+                              color: selectedDate != null
+                                  ? Colors.black
+                                  : Colors.grey.shade400,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide:
-                        const BorderSide(color: Color(0xFF6C5CE7), width: 2),
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Deadline Proyek',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              InkWell(
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime(2030),
-                    builder: (context, child) {
-                      return Theme(
-                        data: Theme.of(context).copyWith(
-                          colorScheme: const ColorScheme.light(
-                            primary: Color(0xFF6C5CE7),
+                  const SizedBox(height: 32),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: isSubmitting
+                            ? null
+                            : () => Navigator.pop(dialogContext),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
                           ),
                         ),
-                        child: child!,
-                      );
-                    },
-                  );
-                  if (date != null) {
-                    selectedDate = date;
-                  }
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_today,
-                          size: 20, color: Colors.grey.shade600),
+                        child: const Text(
+                          'Batal',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                       const SizedBox(width: 12),
-                      Text(
-                        selectedDate != null
-                            ? '${selectedDate!.day.toString().padLeft(2, '0')}/${selectedDate!.month.toString().padLeft(2, '0')}/${selectedDate!.year}'
-                            : 'dd/mm/yyyy',
-                        style: TextStyle(
-                          color: selectedDate != null
-                              ? Colors.black
-                              : Colors.grey.shade400,
-                          fontSize: 14,
+                      ElevatedButton(
+                        onPressed: isSubmitting ? null : submitProject,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6C5CE7),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Buat Proyek',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
-                    ),
-                    child: const Text(
-                      'Batal',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (nameController.text.isNotEmpty &&
-                          descController.text.isNotEmpty &&
-                          selectedDate != null) {
-                        // TODO: Add project logic here
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Proyek berhasil ditambahkan!'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                        Navigator.pop(context);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Mohon lengkapi semua field'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C5CE7),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 32, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Buat Proyek',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                 ],
               ),
-            ],
+            ),
+          );
+        },
+      ),
+    );
+
+    nameController.dispose();
+    descController.dispose();
+
+    if (dialogResult != true) {
+      return;
+    }
+
+    final refreshed = await _loadProjects();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!refreshed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Proyek berhasil disimpan, tetapi daftar gagal dimuat ulang.',
           ),
+          backgroundColor: Colors.orange,
         ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Proyek berhasil ditambahkan!'),
+        backgroundColor: Colors.green,
       ),
     );
   }
@@ -714,10 +816,12 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           _buildSummaryCard(
             'Ringkasan Proyek',
-            '${_mockProjects.length}',
+            '$_totalProjects',
             Icons.folder_outlined,
             const Color(0xFF6C5CE7),
-            'Aktif berjalan',
+            _activeProjects == 0
+                ? 'Aktif berjalan'
+                : '$_activeProjects aktif berjalan',
           ),
           const SizedBox(height: 12),
           _buildSummaryCard(
@@ -744,10 +848,12 @@ class _DashboardPageState extends State<DashboardPage> {
         Expanded(
           child: _buildSummaryCard(
             'Ringkasan Proyek',
-            '${_mockProjects.length}',
+            '$_totalProjects',
             Icons.folder_outlined,
             const Color(0xFF6C5CE7),
-            'Aktif berjalan',
+            _activeProjects == 0
+                ? 'Aktif berjalan'
+                : '$_activeProjects aktif berjalan',
           ),
         ),
         const SizedBox(width: 16),
@@ -831,7 +937,7 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             const SizedBox(width: 12),
             ElevatedButton.icon(
-              onPressed: _showAddProjectDialog,
+              onPressed: () => _showAddProjectDialog(),
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Tambah Proyek'),
               style: ElevatedButton.styleFrom(
@@ -852,8 +958,48 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildProjectGrid(bool isSmallScreen) {
-    final projects = _mockProjects;
+  Widget _buildProjectGrid() {
+    final projects = _projects;
+
+    if (_isLoadingProjects) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 48),
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_projectErrorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(48),
+          child: Column(
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+              const SizedBox(height: 16),
+              Text(
+                _projectErrorMessage!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: _loadProjects,
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.grey.shade300),
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text('Coba Lagi'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     if (projects.isEmpty) {
       return Center(
@@ -861,10 +1007,10 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: const EdgeInsets.all(48),
           child: Column(
             children: [
-              Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
+              Icon(Icons.folder_open, size: 64, color: Colors.grey.shade400),
               const SizedBox(height: 16),
               Text(
-                'Tidak ada proyek ditemukan',
+                'Belum ada proyek',
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.grey.shade600,
@@ -935,9 +1081,9 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -972,7 +1118,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.2),
+                    color: color.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: color, size: 24),
@@ -1010,8 +1156,6 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildProjectCard(Project project) {
-    final daysLeft = project.getDaysUntilDeadline();
-
     return InkWell(
       onTap: () {
         Navigator.push(
@@ -1033,7 +1177,7 @@ class _DashboardPageState extends State<DashboardPage> {
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -1151,14 +1295,14 @@ class _DashboardPageState extends State<DashboardPage> {
                           size: 16, color: Colors.grey.shade600),
                       const SizedBox(width: 8),
                       Text(
-                        _formatDate(project.deadline),
+                        project.deadlineLabel,
                         style: TextStyle(
                             fontSize: 13, color: Colors.grey.shade600),
                       ),
                     ],
                   ),
                   Text(
-                    project.isOverdue ? 'Terlambat' : '$daysLeft hari lagi',
+                    project.deadlineStatusLabel,
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -1166,7 +1310,9 @@ class _DashboardPageState extends State<DashboardPage> {
                           ? Colors.red
                           : project.isUrgent
                               ? Colors.orange
-                              : Colors.green,
+                              : project.deadline == null
+                                  ? Colors.grey.shade600
+                                  : Colors.green,
                     ),
                   ),
                 ],
@@ -1179,8 +1325,6 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildProjectListCard(Project project) {
-    final daysLeft = project.getDaysUntilDeadline();
-
     return InkWell(
       onTap: () {
         Navigator.push(

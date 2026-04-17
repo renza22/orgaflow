@@ -12,10 +12,12 @@ class CreateProjectPresenter {
   Future<Result<ProjectModel>> createProject({
     required String name,
     required String description,
+    DateTime? endDate,
   }) {
     return _repository.createProject(
       name: name,
       description: description,
+      endDate: endDate,
     );
   }
 }
