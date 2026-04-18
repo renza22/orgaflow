@@ -145,6 +145,7 @@ class _ProjectsPageState extends State<ProjectsPage> with RouteAware {
         builder: (context) => ProjectBoardPage(
           projectId: project.id,
           projectName: project.name,
+          projectDescription: project.description,
         ),
       ),
     );

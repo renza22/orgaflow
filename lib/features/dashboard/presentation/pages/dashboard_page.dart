@@ -1665,6 +1665,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
             builder: (context) => ProjectBoardPage(
               projectId: project.id,
               projectName: project.name,
+              projectDescription: project.description,
             ),
           ),
         );
@@ -1842,6 +1843,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
             builder: (context) => ProjectBoardPage(
               projectId: project.id,
               projectName: project.name,
+              projectDescription: project.description,
             ),
           ),
         );

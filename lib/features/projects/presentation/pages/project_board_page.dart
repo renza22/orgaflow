@@ -1,24 +1,31 @@
 import 'package:flutter/material.dart';
 import '../../models/task_model.dart';
-import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
+import '../widgets/overview_tab.dart';
+import '../widgets/kanban_tab.dart';
+import '../widgets/workflow_tab.dart';
+import '../widgets/team_tab.dart';
 
 class ProjectBoardPage extends StatefulWidget {
   final String projectId;
   final String projectName;
+  final String projectDescription;
 
   const ProjectBoardPage({
     super.key,
     required this.projectId,
     required this.projectName,
+    this.projectDescription = '',
   });
 
   @override
   State<ProjectBoardPage> createState() => _ProjectBoardPageState();
 }
 
-class _ProjectBoardPageState extends State<ProjectBoardPage> {
+class _ProjectBoardPageState extends State<ProjectBoardPage>
+    with SingleTickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  late TabController _tabController;
 
   final List<Task> _tasks = [
     Task(
@@ -74,34 +81,31 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
   ];
 
   final List<KanbanColumn> _columns = [
-    KanbanColumn(
-      id: "backlog",
-      title: "Backlog",
-      status: TaskStatus.backlog,
-      color: 0xFF718096,
-    ),
-    KanbanColumn(
-      id: "todo",
-      title: "Todo",
-      status: TaskStatus.todo,
-      color: 0xFF00CEC9,
-    ),
-    KanbanColumn(
-      id: "in-progress",
-      title: "In Progress",
-      status: TaskStatus.inProgress,
-      color: 0xFF6C5CE7,
-    ),
-    KanbanColumn(
-      id: "done",
-      title: "Done",
-      status: TaskStatus.done,
-      color: 0xFF00B894,
-    ),
+    KanbanColumn(id: "backlog", title: "Backlog", status: TaskStatus.backlog, color: 0xFF718096),
+    KanbanColumn(id: "todo", title: "Todo", status: TaskStatus.todo, color: 0xFF00CEC9),
+    KanbanColumn(id: "in-progress", title: "In Progress", status: TaskStatus.inProgress, color: 0xFF6C5CE7),
+    KanbanColumn(id: "done", title: "Done", status: TaskStatus.done, color: 0xFF00B894),
   ];
 
-  List<Task> _getTasksByStatus(TaskStatus status) {
-    return _tasks.where((task) => task.status == status).toList();
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.index != _currentIndex) {
+        setState(() {
+          _currentIndex = _tabController.index;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   void _moveTask(int taskId, TaskStatus newStatus) {
@@ -127,6 +131,11 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
     );
   }
 
+  int get _daysRemaining {
+    // Demo: 18 days remaining
+    return 18;
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -136,77 +145,23 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.grey.shade50,
-      appBar: EnhancedAppBar(
-        showMenuButton: isSmallScreen || isMediumScreen,
-        onMenuPressed: () {
-          _scaffoldKey.currentState?.openDrawer();
-        },
-        title: widget.projectName,
-        subtitle: 'Kanban board untuk manajemen task proyek',
-      ),
-      drawer: (isSmallScreen || isMediumScreen)
-          ? Drawer(
-              child: ResponsiveSidebar(currentRoute: '/projects'),
-            )
-          : null,
       body: Row(
         children: [
-          // Sidebar for desktop
           if (!isSmallScreen && !isMediumScreen)
             const ResponsiveSidebar(currentRoute: '/projects'),
-
-          // Main Content
           Expanded(
-            child: Column(
-              children: [
-                // Action Buttons
-                Container(
-                  padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      bottom: BorderSide(color: Colors.grey.shade200),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      if (!isSmallScreen)
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Membuka Dependency Graph')),
-                            );
-                          },
-                          icon: const Icon(Icons.account_tree, size: 16),
-                          label: const Text('Dependency Graph'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.black,
-                            side: BorderSide(color: Colors.grey.shade300),
-                          ),
-                        ),
-                      if (!isSmallScreen) const SizedBox(width: 12),
-                      if (!isSmallScreen)
-                        ElevatedButton.icon(
-                          onPressed: _showAddTaskDialog,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Tambah Task'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6C5CE7),
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                // Kanban Board
-                Expanded(
-                  child: isSmallScreen || isMediumScreen
-                      ? _buildScrollableBoard()
-                      : _buildGridBoard(),
-                ),
-              ],
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Project Header
+                  _buildProjectHeader(isSmallScreen),
+                  // Tab Bar
+                  _buildTabBar(),
+                  // Tab Content
+                  _buildCurrentTabContent(),
+                ],
+              ),
             ),
           ),
         ],
@@ -221,453 +176,138 @@ class _ProjectBoardPageState extends State<ProjectBoardPage> {
     );
   }
 
-  Widget _buildScrollableBoard() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.all(16),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: _columns.map((column) {
-            final tasks = _getTasksByStatus(column.status);
-            return Container(
-              width: 320,
-              margin: const EdgeInsets.only(right: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Column Header
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 12),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: Color(column.color),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          column.title.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: Text(
-                            '${tasks.length}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Column Body
-                  Expanded(
-                    child: DragTarget<Task>(
-                      onWillAcceptWithDetails: (details) =>
-                          details.data.status != column.status,
-                      onAcceptWithDetails: (details) {
-                        _moveTask(details.data.id, column.status);
-                      },
-                      builder: (context, candidateData, rejectedData) {
-                        final isHovering = candidateData.isNotEmpty;
-                        return Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: isHovering
-                                ? Color(column.color).withValues(alpha: 0.1)
-                                : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isHovering
-                                  ? Color(column.color)
-                                  : Colors.grey.shade200,
-                              width: isHovering ? 2 : 1,
-                            ),
-                          ),
-                          child: tasks.isEmpty
-                              ? Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(24),
-                                    child: Text(
-                                      'Drop task here',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade400,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              : ListView.builder(
-                                  shrinkWrap: true,
-                                  itemCount: tasks.length,
-                                  itemBuilder: (context, index) {
-                                    return _buildTaskCard(
-                                        tasks[index], column.color);
-                                  },
-                                ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
+  Widget _buildCurrentTabContent() {
+    switch (_currentIndex) {
+      case 0:
+        return OverviewTab(
+          tasks: _tasks,
+          dueDate: DateTime.now().add(Duration(days: _daysRemaining)),
+          projectDescription: 'Acara pelantikan pengurus baru organisasi mahasiswa periode 2024/2025',
+        );
+      case 1:
+        return KanbanTab(
+          tasks: _tasks,
+          columns: _columns,
+          onMoveTask: _moveTask,
+          onAddTask: _showAddTaskDialog,
+        );
+      case 2:
+        return WorkflowTab(tasks: _tasks);
+      case 3:
+        return const TeamTab();
+      default:
+        return const SizedBox.shrink();
+    }
   }
 
-  Widget _buildGridBoard() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: _columns.map((column) {
-            final tasks = _getTasksByStatus(column.status);
-            return Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Column Header
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4, bottom: 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: Color(column.color),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            column.title.toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade200,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade300),
-                            ),
-                            child: Text(
-                              '${tasks.length}',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Column Body
-                    Expanded(
-                      child: DragTarget<Task>(
-                        onWillAcceptWithDetails: (details) =>
-                            details.data.status != column.status,
-                        onAcceptWithDetails: (details) {
-                          _moveTask(details.data.id, column.status);
-                        },
-                        builder: (context, candidateData, rejectedData) {
-                          final isHovering = candidateData.isNotEmpty;
-                          return Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: isHovering
-                                  ? Color(column.color).withValues(alpha: 0.1)
-                                  : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isHovering
-                                    ? Color(column.color)
-                                    : Colors.grey.shade200,
-                                width: isHovering ? 2 : 1,
-                              ),
-                            ),
-                            child: tasks.isEmpty
-                                ? Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(24),
-                                      child: Text(
-                                        'Drop task here',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade400,
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    shrinkWrap: true,
-                                    itemCount: tasks.length,
-                                    itemBuilder: (context, index) {
-                                      return _buildTaskCard(
-                                          tasks[index], column.color);
-                                    },
-                                  ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTaskCard(Task task, int columnColor) {
-    return Draggable<Task>(
-      data: task,
-      feedback: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(12),
-        child: SizedBox(
-          width: 280,
-          child: Opacity(
-            opacity: 0.8,
-            child: _buildTaskCardContent(task, columnColor),
-          ),
-        ),
-      ),
-      childWhenDragging: Opacity(
-        opacity: 0.3,
-        child: _buildTaskCardContent(task, columnColor),
-      ),
-      child: _buildTaskCardContent(task, columnColor),
-    );
-  }
-
-  Widget _buildTaskCardContent(Task task, int columnColor) {
+  Widget _buildProjectHeader(bool isSmallScreen) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.fromLTRB(isSmallScreen ? 16 : 28, 20, isSmallScreen ? 16 : 28, 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border(
-          left: BorderSide(color: Color(columnColor), width: 3),
-          right: BorderSide(color: Colors.grey.shade200),
-          top: BorderSide(color: Colors.grey.shade200),
-          bottom: BorderSide(color: Colors.grey.shade200),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title with drag handle
-            Row(
+      child: Row(
+        children: [
+          // Back button
+          InkWell(
+            onTap: () => Navigator.pop(context),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.arrow_back, size: 20, color: Color(0xFF374151)),
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Title
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.drag_indicator,
-                    size: 16, color: Colors.grey.shade300),
+                Text(
+                  widget.projectName,
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: Color(0xFF1F2937)),
+                ),
+                if (widget.projectDescription.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.projectDescription,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Countdown badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF00CEC9), Color(0xFF00B894)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00CEC9).withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.access_time, size: 16, color: Colors.white),
                 const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    task.title,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                Text(
+                  '${_daysRemaining}d',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
                   ),
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            // Description
-            if (task.description.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.only(left: 22),
-                child: Text(
-                  task.description,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-
-            // Meta (Dependencies & Time)
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.only(left: 22),
-              child: Row(
-                children: [
-                  if (task.dependencies.isNotEmpty) ...[
-                    Icon(Icons.account_tree,
-                        size: 12, color: Colors.orange.shade700),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${task.dependencies.length} deps',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.orange.shade700,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Icon(Icons.access_time,
-                      size: 12, color: Colors.grey.shade600),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${task.estimatedHours}h',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Skills
-            if (task.skills.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Padding(
-                padding: const EdgeInsets.only(left: 22),
-                child: Wrap(
-                  spacing: 4,
-                  runSpacing: 4,
-                  children: task.skills.map((skill) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        skill,
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-
-            // Assignee
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.only(left: 22, top: 8),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Colors.grey.shade200),
-                ),
-              ),
-              child: task.assignee.isNotEmpty
-                  ? Row(
-                      children: [
-                        Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6C5CE7).withValues(
-                              alpha: 0.1,
-                            ),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFF6C5CE7).withValues(
-                                alpha: 0.2,
-                              ),
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              task.initials,
-                              style: const TextStyle(
-                                fontSize: 8,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF6C5CE7),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          task.assignee,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    )
-                  : TextButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Assign member')),
-                        );
-                      },
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(0, 24),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text(
-                        '+ Assign',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ),
-            ),
-          ],
-        ),
+  Widget _buildTabBar() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.only(left: 14),
+      child: TabBar(
+        controller: _tabController,
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        labelColor: const Color(0xFF6C5CE7),
+        unselectedLabelColor: Colors.grey.shade600,
+        indicatorColor: const Color(0xFF6C5CE7),
+        indicatorWeight: 3,
+        labelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+        tabs: const [
+          Tab(text: 'Overview'),
+          Tab(text: 'Papan Tugas (Kanban)'),
+          Tab(text: 'Alur Kerja (Graph)'),
+          Tab(text: 'Tim'),
+        ],
       ),
     );
   }
 }
+
+// ─── Add Task Dialog (preserved from original) ──────────────
 
 class _AddTaskDialog extends StatefulWidget {
   final List<Task> existingTasks;
@@ -689,17 +329,9 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
   final _skillSearchController = TextEditingController();
 
   final List<String> _availableSkills = [
-    "Design",
-    "Creative",
-    "Event Management",
-    "Logistik",
-    "Public Speaking",
-    "Technical Writing",
-    "Photography",
-    "Videography",
-    "Social Media",
-    "Backend",
-    "Frontend",
+    "Design", "Creative", "Event Management", "Logistik",
+    "Public Speaking", "Technical Writing", "Photography",
+    "Videography", "Social Media", "Backend", "Frontend",
   ];
 
   final List<String> _selectedSkills = [];
@@ -725,10 +357,7 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
 
     final newTask = Task(
       id: widget.existingTasks.isNotEmpty
-          ? widget.existingTasks
-                  .map((t) => t.id)
-                  .reduce((a, b) => a > b ? a : b) +
-              1
+          ? widget.existingTasks.map((t) => t.id).reduce((a, b) => a > b ? a : b) + 1
           : 1,
       title: _titleController.text,
       description: _descriptionController.text,
@@ -762,24 +391,13 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
             // Header
             Padding(
               padding: const EdgeInsets.all(24),
-              child: Row(
-                children: [
-                  const Text(
-                    'Input Task Manual',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
+              child: Row(children: [
+                const Text('Input Task Manual',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+              ]),
             ),
-
             // Content
             Expanded(
               child: SingleChildScrollView(
@@ -787,110 +405,47 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Task Title
-                    const Text(
-                      'Judul Task',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    const Text('Judul Task', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _titleController,
                       decoration: InputDecoration(
                         hintText: 'Contoh: Cetak Banner',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                     const SizedBox(height: 20),
-
-                    // Description
-                    const Text(
-                      'Deskripsi',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    const Text('Deskripsi', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _descriptionController,
                       maxLines: 3,
                       decoration: InputDecoration(
                         hintText: 'Jelaskan detail task yang harus dikerjakan',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                     const SizedBox(height: 20),
-
-                    // Estimated Hours
-                    const Text(
-                      'Bobot Jam (Estimasi Waktu)',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    const Text('Bobot Jam (Estimasi Waktu)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: 120,
-                          child: TextField(
-                            controller: _hoursController,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              hintText: '5',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
+                    Row(children: [
+                      SizedBox(
+                        width: 120,
+                        child: TextField(
+                          controller: _hoursController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            hintText: '5',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'jam',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Perkiraan berapa jam task ini akan selesai',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Text('jam', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+                    ]),
                     const SizedBox(height: 20),
-
-                    // Skill Tags
-                    const Text(
-                      'Skill Tags',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Skill apa yang dibutuhkan untuk task ini?',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
+                    const Text('Skill Tags', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
-
-                    // Selected Skills
                     if (_selectedSkills.isNotEmpty)
                       Container(
                         padding: const EdgeInsets.all(12),
@@ -900,68 +455,35 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
                           border: Border.all(color: Colors.grey.shade300),
                         ),
                         child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _selectedSkills.map((skill) {
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
+                          spacing: 8, runSpacing: 8,
+                          children: _selectedSkills.map((skill) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6C5CE7),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Text(skill, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                              const SizedBox(width: 4),
+                              InkWell(
+                                onTap: () => setState(() => _selectedSkills.remove(skill)),
+                                child: const Icon(Icons.close, size: 14, color: Colors.white),
                               ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF6C5CE7),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    skill,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedSkills.remove(skill);
-                                      });
-                                    },
-                                    child: const Icon(
-                                      Icons.close,
-                                      size: 14,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
+                            ]),
+                          )).toList(),
                         ),
                       ),
                     const SizedBox(height: 8),
-
-                    // Skill Search
                     TextField(
                       controller: _skillSearchController,
-                      onChanged: (value) {
-                        setState(() {
-                          _skillSearch = value;
-                        });
-                      },
+                      onChanged: (v) => setState(() => _skillSearch = v),
                       decoration: InputDecoration(
                         hintText: 'Cari atau pilih skill...',
                         prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                     const SizedBox(height: 8),
-
-                    // Skill Suggestions
                     if (_skillSearch.isNotEmpty)
                       Container(
                         padding: const EdgeInsets.all(8),
@@ -972,100 +494,47 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
                         constraints: const BoxConstraints(maxHeight: 150),
                         child: filteredSkills.isNotEmpty
                             ? Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: filteredSkills.map((skill) {
-                                  return InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedSkills.add(skill);
-                                        _skillSearchController.clear();
-                                        _skillSearch = '';
-                                      });
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: Colors.grey.shade300,
-                                        ),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        skill,
-                                        style: const TextStyle(fontSize: 13),
-                                      ),
+                                spacing: 8, runSpacing: 8,
+                                children: filteredSkills.map((skill) => InkWell(
+                                  onTap: () => setState(() {
+                                    _selectedSkills.add(skill);
+                                    _skillSearchController.clear();
+                                    _skillSearch = '';
+                                  }),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.grey.shade300),
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
-                                  );
-                                }).toList(),
-                              )
-                            : Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Text(
-                                    'Tidak ada skill yang cocok',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey.shade600,
-                                    ),
+                                    child: Text(skill, style: const TextStyle(fontSize: 13)),
                                   ),
-                                ),
-                              ),
+                                )).toList(),
+                              )
+                            : Center(child: Text('Tidak ada skill yang cocok',
+                                style: TextStyle(fontSize: 13, color: Colors.grey.shade600))),
                       ),
-
-                    // Quick Select Skills
                     if (_skillSearch.isEmpty)
                       Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                        spacing: 8, runSpacing: 8,
                         children: _availableSkills
                             .where((s) => !_selectedSkills.contains(s))
                             .take(6)
-                            .map((skill) {
-                          return InkWell(
-                            onTap: () {
-                              setState(() {
-                                _selectedSkills.add(skill);
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                '+ $skill',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                          );
-                        }).toList(),
+                            .map((skill) => InkWell(
+                                  onTap: () => setState(() => _selectedSkills.add(skill)),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.grey.shade300),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text('+ $skill', style: const TextStyle(fontSize: 12)),
+                                  ),
+                                ))
+                            .toList(),
                       ),
                     const SizedBox(height: 20),
-
-                    // Dependencies
-                    const Text(
-                      'Dependency (Prasyarat Task)',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Pilih task yang harus selesai dulu sebelum task ini bisa dikerjakan',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
+                    const Text('Dependency (Prasyarat Task)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -1081,109 +550,47 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
                               itemBuilder: (context, index) {
                                 final task = widget.existingTasks[index];
                                 return CheckboxListTile(
-                                  value:
-                                      _selectedDependencies.contains(task.id),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      if (value == true) {
-                                        _selectedDependencies.add(task.id);
-                                      } else {
-                                        _selectedDependencies.remove(task.id);
-                                      }
-                                    });
-                                  },
-                                  title: Text(
-                                    task.title,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    task.description,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  secondary: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: Colors.grey.shade300,
-                                      ),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      '${task.estimatedHours}h',
-                                      style: const TextStyle(fontSize: 10),
-                                    ),
-                                  ),
+                                  value: _selectedDependencies.contains(task.id),
+                                  onChanged: (value) => setState(() {
+                                    if (value == true) {
+                                      _selectedDependencies.add(task.id);
+                                    } else {
+                                      _selectedDependencies.remove(task.id);
+                                    }
+                                  }),
+                                  title: Text(task.title,
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                  subtitle: Text(task.description,
+                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                      maxLines: 1, overflow: TextOverflow.ellipsis),
                                   dense: true,
                                 );
                               },
                             )
-                          : Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Text(
-                                  'Belum ada task lain yang tersedia',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ),
-                            ),
+                          : Center(child: Text('Belum ada task lain',
+                              style: TextStyle(fontSize: 13, color: Colors.grey.shade600))),
                     ),
-                    if (_selectedDependencies.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '${_selectedDependencies.length} dependency dipilih',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF6C5CE7),
-                          ),
-                        ),
-                      ),
                     const SizedBox(height: 24),
                   ],
                 ),
               ),
             ),
-
             // Footer
             Container(
               padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Colors.grey.shade200),
+              decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade200))),
+              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: _addTask,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6C5CE7),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Tambah Task'),
                 ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Batal'),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: _addTask,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C5CE7),
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Tambah Task'),
-                  ),
-                ],
-              ),
+              ]),
             ),
           ],
         ),
