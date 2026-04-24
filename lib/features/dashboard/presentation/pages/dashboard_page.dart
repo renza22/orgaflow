@@ -16,6 +16,8 @@ import '../../../projects/presentation/pages/project_board_page.dart';
 import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
 
+enum _DashboardProjectActionResult { created, updated, deleted }
+
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -40,6 +42,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
   bool _isLoadingSessionContext = false;
   bool _isLoadingProjects = true;
   bool _isUploadingOrganizationLogo = false;
+  bool _canManageProjects = false;
   int? _organizationLogoVersion;
   String? _projectErrorMessage;
 
@@ -147,7 +150,16 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       }
     });
 
-    final result = await _projectsPresenter.fetchProjects();
+    final fetchProjectsFuture = _projectsPresenter.fetchProjects();
+    final canManageFuture = _projectsPresenter.canManageProjects();
+
+    final result = await fetchProjectsFuture;
+    var canManageProjects = _canManageProjects;
+    try {
+      canManageProjects = await canManageFuture;
+    } catch (_) {
+      canManageProjects = _canManageProjects;
+    }
 
     if (!mounted) {
       return false;
@@ -156,6 +168,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     if (result.isFailure) {
       setState(() {
         _projects = previousProjects;
+        _canManageProjects = canManageProjects;
         _isLoadingProjects = false;
         _projectErrorMessage =
             previousProjects.isEmpty ? result.error!.message : null;
@@ -172,11 +185,79 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       _projects = result.data!
           .map((project) => Project.fromProjectModel(project))
           .toList();
+      _canManageProjects = canManageProjects;
       _isLoadingProjects = false;
       _projectErrorMessage = null;
     });
 
     return true;
+  }
+
+  void _showSnackBar(
+    String message, {
+    Color? backgroundColor,
+  }) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+      ),
+    );
+  }
+
+  Future<void> _handleProjectActionResult(
+    _DashboardProjectActionResult? result,
+  ) async {
+    if (result == null) {
+      return;
+    }
+
+    final refreshed = await _loadProjects();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!refreshed) {
+      _showSnackBar(
+        _warningMessageForProjectAction(result),
+        backgroundColor: Colors.orange,
+      );
+      return;
+    }
+
+    _showSnackBar(
+      _successMessageForProjectAction(result),
+      backgroundColor: Colors.green,
+    );
+  }
+
+  String _successMessageForProjectAction(
+    _DashboardProjectActionResult result,
+  ) {
+    switch (result) {
+      case _DashboardProjectActionResult.created:
+        return 'Proyek berhasil ditambahkan!';
+      case _DashboardProjectActionResult.updated:
+        return 'Proyek berhasil diperbarui!';
+      case _DashboardProjectActionResult.deleted:
+        return 'Proyek berhasil dihapus!';
+    }
+  }
+
+  String _warningMessageForProjectAction(
+    _DashboardProjectActionResult result,
+  ) {
+    switch (result) {
+      case _DashboardProjectActionResult.created:
+        return 'Proyek berhasil disimpan, tetapi daftar gagal dimuat ulang.';
+      case _DashboardProjectActionResult.updated:
+        return 'Proyek berhasil diperbarui, tetapi daftar gagal dimuat ulang.';
+      case _DashboardProjectActionResult.deleted:
+        return 'Proyek berhasil dihapus, tetapi daftar gagal dimuat ulang.';
+    }
   }
 
   Future<void> _handleOrganizationLogoTap() async {
@@ -377,7 +458,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     final organizationName = _sessionContext?.organization?.name;
     final userName = _sessionContext?.profile?.fullName ?? 'User';
     final userRole = _sessionContext?.activeMember?.role;
-    
+
     // Map role to Indonesian display name
     String getRoleDisplayName(String? role) {
       if (role == null) return 'Anggota';
@@ -400,7 +481,8 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
           children: [
             // Logo
             GestureDetector(
-              onTap: _canEditOrganizationLogo ? _handleOrganizationLogoTap : null,
+              onTap:
+                  _canEditOrganizationLogo ? _handleOrganizationLogoTap : null,
               child: Container(
                 width: isSmallScreen ? 48 : 64,
                 height: isSmallScreen ? 48 : 64,
@@ -452,7 +534,8 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
             if (!isSmallScreen) ...[
               const SizedBox(width: 24),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade50,
                   borderRadius: BorderRadius.circular(12),
@@ -470,7 +553,8 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                     ),
                     const SizedBox(width: 16),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
@@ -478,7 +562,8 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
+                          Icon(Icons.access_time,
+                              size: 14, color: Colors.grey.shade600),
                           const SizedBox(width: 6),
                           Text(
                             _currentTime,
@@ -486,7 +571,9 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                               color: Colors.grey.shade800,
-                              fontFeatures: const [FontFeature.tabularFigures()],
+                              fontFeatures: const [
+                                FontFeature.tabularFigures()
+                              ],
                             ),
                           ),
                         ],
@@ -522,41 +609,17 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     return '${days[now.weekday % 7]}, ${now.day} ${months[now.month - 1]} ${now.year}';
   }
 
-  String _getCurrentDate() {
-    final now = DateTime.now();
-    final days = [
-      'Minggu',
-      'Senin',
-      'Selasa',
-      'Rabu',
-      'Kamis',
-      'Jumat',
-      'Sabtu'
-    ];
-    final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'Mei',
-      'Jun',
-      'Jul',
-      'Agu',
-      'Sep',
-      'Okt',
-      'Nov',
-      'Des'
-    ];
-    return '${days[now.weekday % 7]}, ${now.day} ${months[now.month - 1]} ${now.year}';
-  }
-
   Future<void> _showAddProjectDialog() async {
+    if (!_canManageProjects) {
+      return;
+    }
+
     final nameController = TextEditingController();
     final descController = TextEditingController();
     DateTime? selectedDate;
     var isSubmitting = false;
 
-    final dialogResult = await showDialog<bool>(
+    final dialogResult = await showDialog<_DashboardProjectActionResult>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) {
@@ -565,11 +628,9 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
             final description = descController.text.trim();
 
             if (name.isEmpty || description.isEmpty || selectedDate == null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Mohon lengkapi semua field'),
-                  backgroundColor: Colors.red,
-                ),
+              _showSnackBar(
+                'Mohon lengkapi semua field',
+                backgroundColor: Colors.red,
               );
               return;
             }
@@ -592,16 +653,16 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
               setDialogState(() {
                 isSubmitting = false;
               });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(result.error!.message),
-                  backgroundColor: Colors.red,
-                ),
+              _showSnackBar(
+                result.error!.message,
+                backgroundColor: Colors.red,
               );
               return;
             }
 
-            Navigator.pop(dialogContext, true);
+            Navigator.of(dialogContext).pop(
+              _DashboardProjectActionResult.created,
+            );
           }
 
           return Dialog(
@@ -830,207 +891,272 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     nameController.dispose();
     descController.dispose();
 
-    if (dialogResult != true) {
-      return;
-    }
-
-    final refreshed = await _loadProjects();
-
-    if (!mounted) {
-      return;
-    }
-
-    if (!refreshed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Proyek berhasil disimpan, tetapi daftar gagal dimuat ulang.',
-          ),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Proyek berhasil ditambahkan!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    await _handleProjectActionResult(dialogResult);
   }
 
-  void _showEditProjectDialog(Project project) {
+  Future<void> _showEditProjectDialog(Project project) async {
+    if (!_canManageProjects) {
+      return;
+    }
+
     final nameController = TextEditingController(text: project.name);
-    final descController = TextEditingController(text: project.description);
+    final descController = TextEditingController(
+      text: project.description == '-' ? '' : project.description,
+    );
+    var isSubmitting = false;
 
-    showDialog(
+    final dialogResult = await showDialog<_DashboardProjectActionResult>(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Container(
-          width: 500,
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          Future<void> submitProject() async {
+            final name = nameController.text.trim();
+            final description = descController.text.trim();
+
+            if (name.isEmpty || description.isEmpty) {
+              _showSnackBar(
+                'Mohon lengkapi semua field',
+                backgroundColor: Colors.red,
+              );
+              return;
+            }
+
+            setDialogState(() {
+              isSubmitting = true;
+            });
+
+            final result = await _projectsPresenter.updateProject(
+              projectId: project.id,
+              name: name,
+              description: description,
+              endDate: project.deadline,
+            );
+
+            if (!mounted || !dialogContext.mounted) {
+              return;
+            }
+
+            if (result.isFailure) {
+              setDialogState(() {
+                isSubmitting = false;
+              });
+              _showSnackBar(
+                result.error!.message,
+                backgroundColor: Colors.red,
+              );
+              return;
+            }
+
+            Navigator.of(dialogContext).pop(
+              _DashboardProjectActionResult.updated,
+            );
+          }
+
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Container(
+              width: 500,
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Edit Proyek',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: isSubmitting
+                            ? null
+                            : () => Navigator.pop(dialogContext),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
                   const Text(
-                    'Edit Proyek',
+                    'Nama Proyek',
                     style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Nama Proyek',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  hintText: 'Contoh: Inaugurasi 2024',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide:
-                        const BorderSide(color: Color(0xFF6C5CE7), width: 2),
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Deskripsi',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: descController,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Jelaskan tujuan dan detail proyek',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide:
-                        const BorderSide(color: Color(0xFF6C5CE7), width: 2),
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
-                    ),
-                    child: const Text(
-                      'Batal',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (nameController.text.isNotEmpty &&
-                          descController.text.isNotEmpty) {
-                        // TODO: Update project in database
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Proyek berhasil diupdate!'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                        Navigator.pop(context);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Mohon lengkapi semua field'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C5CE7),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 32, vertical: 12),
-                      shape: RoundedRectangleBorder(
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      hintText: 'Contoh: Inaugurasi 2024',
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
                       ),
-                    ),
-                    child: const Text(
-                      'Simpan Perubahan',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF6C5CE7),
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
                       ),
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Deskripsi',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: descController,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText: 'Jelaskan tujuan dan detail proyek',
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF6C5CE7),
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: isSubmitting
+                            ? null
+                            : () => Navigator.pop(dialogContext),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                        ),
+                        child: const Text(
+                          'Batal',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: isSubmitting ? null : submitProject,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6C5CE7),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Simpan Perubahan',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
+
+    nameController.dispose();
+    descController.dispose();
+
+    await _handleProjectActionResult(dialogResult);
   }
 
-  void _showDeleteProjectDialog(Project project) {
+  Future<void> _showDeleteProjectDialog(Project project) async {
+    if (!_canManageProjects) {
+      return;
+    }
+
     final confirmController = TextEditingController();
     bool isConfirmValid = false;
+    var isDeleting = false;
 
-    showDialog(
+    final dialogResult = await showDialog<_DashboardProjectActionResult>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          Future<void> deleteProject() async {
+            if (!isConfirmValid || isDeleting) {
+              return;
+            }
+
+            setDialogState(() {
+              isDeleting = true;
+            });
+
+            final result = await _projectsPresenter.deleteProject(project.id);
+
+            if (!mounted || !dialogContext.mounted) {
+              return;
+            }
+
+            if (result.isFailure) {
+              setDialogState(() {
+                isDeleting = false;
+              });
+              _showSnackBar(
+                result.error!.message,
+                backgroundColor: Colors.red,
+              );
+              return;
+            }
+
+            Navigator.of(dialogContext).pop(
+              _DashboardProjectActionResult.deleted,
+            );
+          }
+
           return Dialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -1069,7 +1195,9 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                       ),
                       IconButton(
                         icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: isDeleting
+                            ? null
+                            : () => Navigator.pop(dialogContext),
                       ),
                     ],
                   ),
@@ -1087,12 +1215,17 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                     decoration: BoxDecoration(
                       color: Colors.red.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                      border: Border.all(
+                        color: Colors.red.withValues(alpha: 0.2),
+                      ),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.info_outline,
-                            color: Colors.red, size: 20),
+                        const Icon(
+                          Icons.info_outline,
+                          color: Colors.red,
+                          size: 20,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
@@ -1117,6 +1250,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                   const SizedBox(height: 8),
                   TextField(
                     controller: confirmController,
+                    enabled: !isDeleting,
                     onChanged: (value) {
                       setDialogState(() {
                         isConfirmValid = value.toLowerCase() == 'hapus';
@@ -1135,10 +1269,15 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Colors.red, width: 2),
+                        borderSide: const BorderSide(
+                          color: Colors.red,
+                          width: 2,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 32),
@@ -1146,10 +1285,14 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: isDeleting
+                            ? null
+                            : () => Navigator.pop(dialogContext),
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 12),
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
                         ),
                         child: const Text(
                           'Batal',
@@ -1162,20 +1305,8 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                       ),
                       const SizedBox(width: 12),
                       ElevatedButton(
-                        onPressed: isConfirmValid
-                            ? () {
-                                setState(() {
-                                  _projects.remove(project);
-                                });
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                        'Project "${project.name}" berhasil dihapus'),
-                                    backgroundColor: Colors.green,
-                                  ),
-                                );
-                              }
+                        onPressed: isConfirmValid && !isDeleting
+                            ? deleteProject
                             : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
@@ -1183,7 +1314,9 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                           disabledBackgroundColor: Colors.grey.shade300,
                           disabledForegroundColor: Colors.grey.shade500,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 32, vertical: 12),
+                            horizontal: 32,
+                            vertical: 12,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -1205,6 +1338,10 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
         },
       ),
     );
+
+    confirmController.dispose();
+
+    await _handleProjectActionResult(dialogResult);
   }
 
   Widget _buildSummaryCards(bool isSmallScreen) {
@@ -1278,10 +1415,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
   }
 
   Widget _buildProjectListHeader(bool isSmallScreen) {
-    final userRole = _sessionContext?.activeMember?.role;
-    final canAddProject = userRole == 'owner' || 
-                          userRole == 'admin' || 
-                          userRole == 'ketua_divisi';
+    final canAddProject = _canManageProjects;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1525,12 +1659,12 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     List<Color> gradientColors;
     Color iconBgColor;
     Color borderColor;
-    
+
     if (title == 'Ringkasan Proyek') {
       gradientColors = [
         const Color(0xFFE9E4FF), // Light purple at top-left
         const Color(0xFFF5F3FF), // Medium light purple
-        Colors.white,            // White at bottom-right
+        Colors.white, // White at bottom-right
       ];
       iconBgColor = const Color(0xFFDDD6FE);
       borderColor = const Color(0xFFDDD6FE);
@@ -1538,7 +1672,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       gradientColors = [
         const Color(0xFFCCFBF1), // Light cyan at top-left
         const Color(0xFFE0F2FE), // Medium light cyan
-        Colors.white,            // White at bottom-right
+        Colors.white, // White at bottom-right
       ];
       iconBgColor = const Color(0xFFAFECEF);
       borderColor = const Color(0xFFAFECEF);
@@ -1547,7 +1681,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       gradientColors = [
         const Color(0xFFFFE4E6), // Light red/pink at top-left
         const Color(0xFFFEF2F2), // Medium light pink
-        Colors.white,            // White at bottom-right
+        Colors.white, // White at bottom-right
       ];
       iconBgColor = const Color(0xFFFECDD3);
       borderColor = const Color(0xFFFECDD3);
@@ -1654,8 +1788,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
   }
 
   Widget _buildProjectCard(Project project) {
-    final userRole = _sessionContext?.activeMember?.role;
-    final canDelete = userRole == 'owner' || userRole == 'admin';
+    final canManageProject = _canManageProjects;
 
     return InkWell(
       onTap: () {
@@ -1728,48 +1861,68 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                         ),
                       ),
                     const SizedBox(width: 4),
-                    PopupMenuButton<String>(
-                      icon: Icon(Icons.more_vert, color: Colors.grey.shade600, size: 20),
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          _showEditProjectDialog(project);
-                        } else if (value == 'delete') {
-                          _showDeleteProjectDialog(project);
-                        }
-                      },
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit_outlined, color: Color(0xFF6C5CE7), size: 20),
-                              SizedBox(width: 12),
-                              Text(
-                                'Edit Project',
-                                style: TextStyle(color: Color(0xFF6C5CE7), fontSize: 14),
-                              ),
-                            ],
-                          ),
+                    if (canManageProject)
+                      PopupMenuButton<String>(
+                        icon: Icon(
+                          Icons.more_vert,
+                          color: Colors.grey.shade600,
+                          size: 20,
                         ),
-                        if (canDelete)
-                          const PopupMenuItem(
-                            value: 'delete',
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            _showEditProjectDialog(project);
+                          } else if (value == 'delete') {
+                            _showDeleteProjectDialog(project);
+                          }
+                        },
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(
+                            value: 'edit',
                             child: Row(
                               children: [
-                                Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                Icon(
+                                  Icons.edit_outlined,
+                                  color: Color(0xFF6C5CE7),
+                                  size: 20,
+                                ),
                                 SizedBox(width: 12),
                                 Text(
-                                  'Hapus Project',
-                                  style: TextStyle(color: Colors.red, fontSize: 14),
+                                  'Edit Project',
+                                  style: TextStyle(
+                                    color: Color(0xFF6C5CE7),
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                      ],
-                    ),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                  size: 20,
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Hapus Project',
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      const SizedBox(width: 20, height: 20),
                   ],
                 ),
               ],

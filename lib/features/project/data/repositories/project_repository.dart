@@ -100,7 +100,13 @@ class ProjectRepository {
       return false;
     }
 
-    return activeMember.isOwner || activeMember.role == 'admin';
+    final role = activeMember.role.toLowerCase();
+    final positionCode = activeMember.positionCode?.toLowerCase();
+
+    return activeMember.isOwner ||
+        role == 'admin' ||
+        role == 'ketua_divisi' ||
+        positionCode == 'ketua_divisi';
   }
 
   Future<SessionContext> _requireActiveContext() async {

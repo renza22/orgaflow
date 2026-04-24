@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/errors/app_error.dart';
 import '../../../../core/supabase_config.dart';
 import '../../domain/models/project_model.dart';
 
@@ -159,7 +160,16 @@ class ProjectRemoteDatasource {
   Future<void> deleteProject({
     required String projectId,
   }) async {
-    await _client.from('projects').delete().eq('id', projectId);
+    final deletedProject = await _client
+        .from('projects')
+        .delete()
+        .eq('id', projectId)
+        .select('id')
+        .maybeSingle();
+
+    if (deletedProject == null) {
+      throw const AppError('Proyek gagal dihapus.');
+    }
   }
 
   String _formatDate(DateTime date) {

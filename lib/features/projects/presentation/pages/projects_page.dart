@@ -95,7 +95,12 @@ class _ProjectsPageState extends State<ProjectsPage> with RouteAware {
     final canManageFuture = _presenter.canManageProjects();
 
     final projectResult = await fetchProjectsFuture;
-    final canManageProjects = await canManageFuture;
+    var canManageProjects = _canManageProjects;
+    try {
+      canManageProjects = await canManageFuture;
+    } catch (_) {
+      canManageProjects = _canManageProjects;
+    }
 
     if (!mounted) {
       return false;
@@ -494,8 +499,16 @@ class _ProjectsPageState extends State<ProjectsPage> with RouteAware {
       return;
     }
 
-    await _loadProjects();
+    final refreshed = await _loadProjects();
     if (!mounted) {
+      return;
+    }
+
+    if (!refreshed) {
+      _showSnackBar(
+        'Proyek berhasil dihapus, tetapi daftar gagal dimuat ulang.',
+        backgroundColor: Colors.orange,
+      );
       return;
     }
 
