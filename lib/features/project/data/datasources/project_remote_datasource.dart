@@ -18,13 +18,60 @@ class ProjectRemoteDatasource {
   Future<List<ProjectModel>> fetchProjects({
     required String organizationId,
   }) async {
-    final response = await _client
-        .from('projects')
-        .select(_projectColumns)
-        .eq('organization_id', organizationId)
-        .order('updated_at', ascending: false);
+    // Get current user
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      throw const AppError('User not authenticated');
+    }
 
-    final projects = (response as List<dynamic>)
+    // Get user's member info to check role
+    final memberInfo = await _client
+        .from('members')
+        .select('id, role')
+        .eq('profile_id', userId)
+        .eq('organization_id', organizationId)
+        .maybeSingle();
+
+    if (memberInfo == null) {
+      return const [];
+    }
+
+    final memberId = memberInfo['id'] as String;
+    final role = memberInfo['role'] as String;
+
+    // If user is owner or admin, show all projects
+    // If user is member, only show projects they are part of
+    List<dynamic> response;
+    
+    if (role == 'owner' || role == 'admin') {
+      response = await _client
+          .from('projects')
+          .select(_projectColumns)
+          .eq('organization_id', organizationId)
+          .order('updated_at', ascending: false);
+    } else {
+      // For regular members, only show projects they are assigned to
+      final projectMemberships = await _client
+          .from('project_members')
+          .select('project_id')
+          .eq('member_id', memberId);
+
+      final projectIds = projectMemberships
+          .map((pm) => pm['project_id'] as String)
+          .toList();
+
+      if (projectIds.isEmpty) {
+        return const [];
+      }
+
+      response = await _client
+          .from('projects')
+          .select(_projectColumns)
+          .inFilter('id', projectIds)
+          .order('updated_at', ascending: false);
+    }
+
+    final projects = response
         .map((json) => ProjectModel.fromJson(json as Map<String, dynamic>))
         .toList();
 
