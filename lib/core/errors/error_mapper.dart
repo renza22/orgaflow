@@ -93,7 +93,12 @@ class ErrorMapper {
       return 'Task tidak bisa bergantung pada dirinya sendiri.';
     }
 
-    if (message.contains('row-level security')) {
+    if (error.code == '42501' ||
+        message.contains('row-level security') ||
+        message.contains('permission denied') ||
+        message.contains('not authorized') ||
+        message.contains('not allowed') ||
+        message.contains('insufficient privilege')) {
       return 'Anda tidak memiliki izin untuk melakukan aksi ini.';
     }
 

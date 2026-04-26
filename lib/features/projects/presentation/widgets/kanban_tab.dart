@@ -4,15 +4,21 @@ import '../../models/task_model.dart';
 class KanbanTab extends StatefulWidget {
   final List<Task> tasks;
   final List<KanbanColumn> columns;
-  final void Function(int taskId, TaskStatus newStatus) onMoveTask;
+  final bool canManageTasks;
+  final Future<void> Function(int taskId, TaskStatus newStatus) onMoveTask;
   final VoidCallback onAddTask;
+  final ValueChanged<Task> onEditTask;
+  final ValueChanged<Task> onDeleteTask;
 
   const KanbanTab({
     super.key,
     required this.tasks,
     required this.columns,
+    required this.canManageTasks,
     required this.onMoveTask,
     required this.onAddTask,
+    required this.onEditTask,
+    required this.onDeleteTask,
   });
 
   @override
@@ -35,7 +41,8 @@ class _KanbanTabState extends State<KanbanTab> {
       children: [
         // Top bar
         Container(
-          padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 16 : 24, vertical: 12),
+          padding: EdgeInsets.symmetric(
+              horizontal: isSmallScreen ? 16 : 24, vertical: 12),
           decoration: BoxDecoration(
             color: Colors.white,
             border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
@@ -45,7 +52,7 @@ class _KanbanTabState extends State<KanbanTab> {
               Text('Kanban board untuk manajemen task proyek',
                   style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
               const Spacer(),
-              if (!isSmallScreen)
+              if (!isSmallScreen && widget.canManageTasks)
                 ElevatedButton.icon(
                   onPressed: widget.onAddTask,
                   icon: const Icon(Icons.add, size: 18),
@@ -114,11 +121,17 @@ class _KanbanTabState extends State<KanbanTab> {
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 12),
           child: Row(children: [
-            Container(width: 8, height: 8,
-                decoration: BoxDecoration(color: Color(column.color), shape: BoxShape.circle)),
+            Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                    color: Color(column.color), shape: BoxShape.circle)),
             const SizedBox(width: 8),
             Text(column.title.toUpperCase(),
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5)),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -127,14 +140,22 @@ class _KanbanTabState extends State<KanbanTab> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade300),
               ),
-              child: Text('${tasks.length}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+              child: Text('${tasks.length}',
+                  style: const TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w500)),
             ),
           ]),
         ),
         // Body — ConstrainedBox replaces Expanded for unbounded parent compatibility
         DragTarget<Task>(
-          onWillAcceptWithDetails: (details) => details.data.status != column.status,
-          onAcceptWithDetails: (details) => widget.onMoveTask(details.data.id, column.status),
+          onWillAcceptWithDetails: (details) =>
+              widget.canManageTasks && details.data.status != column.status,
+          onAcceptWithDetails: (details) async {
+            if (!widget.canManageTasks) {
+              return;
+            }
+            await widget.onMoveTask(details.data.id, column.status);
+          },
           builder: (context, candidateData, rejectedData) {
             final isHovering = candidateData.isNotEmpty;
             return ConstrainedBox(
@@ -143,17 +164,26 @@ class _KanbanTabState extends State<KanbanTab> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: isHovering ? Color(column.color).withValues(alpha: 0.1) : Colors.grey.shade100,
+                  color: isHovering
+                      ? Color(column.color).withValues(alpha: 0.1)
+                      : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: isHovering ? Color(column.color) : Colors.grey.shade200,
+                    color:
+                        isHovering ? Color(column.color) : Colors.grey.shade200,
                     width: isHovering ? 2 : 1,
                   ),
                 ),
                 child: tasks.isEmpty
-                    ? Center(child: Padding(
+                    ? Center(
+                        child: Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Text('Drop task here', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+                        child: Text(
+                            widget.canManageTasks
+                                ? 'Drop task here'
+                                : 'Belum ada task',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey.shade400)),
                       ))
                     : Column(
                         children: tasks
@@ -169,102 +199,324 @@ class _KanbanTabState extends State<KanbanTab> {
   }
 
   Widget _buildTaskCard(Task task, int columnColor) {
+    final card = _buildTaskCardSurface(task, columnColor);
+
+    if (!widget.canManageTasks) {
+      return card;
+    }
+
     return Draggable<Task>(
       data: task,
       feedback: Material(
+        color: Colors.transparent,
         elevation: 8,
         borderRadius: BorderRadius.circular(12),
-        child: SizedBox(width: 280, child: Opacity(opacity: 0.8, child: _buildCardContent(task, columnColor))),
+        child: SizedBox(
+          width: 280,
+          child: Opacity(
+            opacity: 0.8,
+            child: _buildTaskCardSurface(task, columnColor),
+          ),
+        ),
       ),
-      childWhenDragging: Opacity(opacity: 0.3, child: _buildCardContent(task, columnColor)),
+      childWhenDragging: Opacity(
+        opacity: 0.3,
+        child: _buildTaskCardSurface(task, columnColor),
+      ),
+      child: card,
+    );
+  }
+
+  Widget _buildTaskCardSurface(Task task, int columnColor) {
+    return Material(
+      color: Colors.transparent,
       child: _buildCardContent(task, columnColor),
     );
   }
 
   Widget _buildCardContent(Task task, int columnColor) {
-    return Container(
+    final title =
+        task.title.trim().isNotEmpty ? task.title.trim() : 'Untitled Task';
+    final description = task.description.trim();
+    final estimatedHours = task.estimatedHours % 1 == 0
+        ? task.estimatedHours.toInt().toString()
+        : task.estimatedHours.toStringAsFixed(1);
+
+    return Card(
+      color: Colors.white,
+      surfaceTintColor: Colors.white,
       margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
+      elevation: 1,
+      shadowColor: Colors.black.withValues(alpha: 0.12),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        border: Border(
-          left: BorderSide(color: Color(columnColor), width: 3),
-          right: BorderSide(color: Colors.grey.shade200),
-          top: BorderSide(color: Colors.grey.shade200),
-          bottom: BorderSide(color: Colors.grey.shade200),
-        ),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))],
+        side: BorderSide(color: Colors.grey.shade200),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(Icons.drag_indicator, size: 16, color: Colors.grey.shade300),
-            const SizedBox(width: 6),
-            Expanded(child: Text(task.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
-          ]),
-          if (task.description.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.only(left: 22),
-              child: Text(task.description, style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  maxLines: 2, overflow: TextOverflow.ellipsis),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 110),
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: Color(columnColor), width: 3)),
+        ),
+        child: DefaultTextStyle.merge(
+          style: const TextStyle(color: Color(0xFF1F2937)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 10, 10),
+            child: _buildTaskCardBody(
+              task: task,
+              title: title,
+              description: description,
+              estimatedHours: estimatedHours,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTaskCardBody({
+    required Task task,
+    required String title,
+    required String description,
+    required String estimatedHours,
+  }) {
+    final contentIndent = widget.canManageTasks ? 22.0 : 0.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (widget.canManageTasks) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(Icons.drag_indicator,
+                  size: 16, color: Colors.grey.shade300),
+            ),
+            const SizedBox(width: 6),
           ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1F2937),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.35,
+                      color: Color(0xFF6B7280),
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (widget.canManageTasks) _buildTaskActionsMenu(task),
+        ]),
+        const SizedBox(height: 10),
+        Padding(
+          padding: EdgeInsets.only(left: contentIndent),
+          child: _buildTaskMetadata(task, estimatedHours),
+        ),
+        if (task.skills.isNotEmpty) ...[
           const SizedBox(height: 10),
           Padding(
-            padding: const EdgeInsets.only(left: 22),
-            child: Row(children: [
-              if (task.dependencies.isNotEmpty) ...[
-                Icon(Icons.account_tree, size: 12, color: Colors.orange.shade700),
-                const SizedBox(width: 4),
-                Text('${task.dependencies.length} deps',
-                    style: TextStyle(fontSize: 11, color: Colors.orange.shade700)),
-                const SizedBox(width: 12),
+            padding: EdgeInsets.only(left: contentIndent),
+            child: _buildTaskSkillChips(task.skills),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Padding(
+          padding: EdgeInsets.only(left: contentIndent),
+          child: Divider(
+            height: 1,
+            thickness: 1,
+            color: Colors.grey.shade200,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: EdgeInsets.only(left: contentIndent),
+          child: _buildTaskCardFooter(task),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTaskActionsMenu(Task task) {
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: PopupMenuButton<String>(
+        tooltip: 'Aksi task',
+        padding: EdgeInsets.zero,
+        child: Center(
+          child: Icon(
+            Icons.more_vert,
+            size: 18,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        onSelected: (value) {
+          if (value == 'edit') {
+            widget.onEditTask(task);
+          } else if (value == 'delete') {
+            widget.onDeleteTask(task);
+          }
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: 'edit',
+            child: Row(
+              children: [
+                Icon(Icons.edit, size: 16),
+                SizedBox(width: 8),
+                Text('Edit'),
               ],
-              Icon(Icons.access_time, size: 12, color: Colors.grey.shade600),
-              const SizedBox(width: 4),
-              Text('${task.estimatedHours}h', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-            ]),
-          ),
-          if (task.skills.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.only(left: 22),
-              child: Wrap(spacing: 4, runSpacing: 4, children: task.skills.map((s) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(4)),
-                child: Text(s, style: TextStyle(fontSize: 9, color: Colors.grey.shade700)),
-              )).toList()),
             ),
-          ],
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.only(left: 22, top: 8),
-            decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade200))),
-            child: task.assignee.isNotEmpty
-                ? Row(children: [
-                    Container(
-                      width: 20, height: 20,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFF6C5CE7).withValues(alpha: 0.2)),
-                      ),
-                      child: Center(child: Text(task.initials,
-                          style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w600, color: Color(0xFF6C5CE7)))),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(task.assignee, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                  ])
-                : TextButton(
-                    onPressed: () {},
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 24),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                    child: Text('+ Assign', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
-                  ),
           ),
-        ]),
+          PopupMenuItem(
+            value: 'delete',
+            child: Row(
+              children: [
+                Icon(Icons.delete_outline, size: 16),
+                SizedBox(width: 8),
+                Text('Delete'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskMetadata(Task task, String estimatedHours) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (task.dependencies.isNotEmpty) ...[
+          Icon(Icons.account_tree, size: 12, color: Colors.orange.shade700),
+          const SizedBox(width: 4),
+          Text(
+            '${task.dependencies.length} deps',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Colors.orange.shade700,
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+        Icon(Icons.access_time, size: 12, color: Colors.grey.shade600),
+        const SizedBox(width: 4),
+        Text(
+          '${estimatedHours}h',
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF374151),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTaskSkillChips(List<String> skills) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: skills
+          .map(
+            (skill) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Text(
+                skill,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF374151),
+                ),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildTaskCardFooter(Task task) {
+    if (task.assignee.isNotEmpty) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: const Color(0xFF6C5CE7).withValues(alpha: 0.2),
+              ),
+            ),
+            child: Center(
+              child: Text(
+                task.initials,
+                style: const TextStyle(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6C5CE7),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            task.assignee,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+          ),
+        ],
+      );
+    }
+
+    final assignText = Text(
+      '+ Assign',
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
+        color: Color(0xFF6B7280),
+      ),
+    );
+
+    if (!widget.canManageTasks) {
+      return assignText;
+    }
+
+    return InkWell(
+      onTap: () {},
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: assignText,
       ),
     );
   }

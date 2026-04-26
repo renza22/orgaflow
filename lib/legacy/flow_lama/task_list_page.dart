@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 
-import '../../../assignment/presentation/pages/assign_task_page.dart';
-import '../../../dependency/presentation/pages/manage_dependency_page.dart';
-import '../../../workload/presentation/pages/workload_dashboard_page.dart';
-import '../../domain/models/task_model.dart';
-import '../presenters/task_list_presenter.dart';
+import '../../features/assignment/presentation/pages/assign_task_page.dart';
+import '../../features/dependency/presentation/pages/manage_dependency_page.dart';
+import '../../features/task/domain/models/task_model.dart';
+import '../../features/task/presentation/presenters/task_list_presenter.dart';
+import '../../features/workload/presentation/pages/workload_dashboard_page.dart';
 import 'create_task_page.dart';
 
+/*
+LEGACY FLOW:
+This page belongs to the old setup/project/task flow and is not part of the
+current primary app flow. Current primary flow uses OnboardingPage,
+ProjectsPage, and ProjectBoardPage Kanban modal. Keep this file for reference
+only until safe removal.
+*/
 class TaskListPage extends StatefulWidget {
   final String projectId;
 
@@ -196,6 +203,7 @@ class _TaskListPageState extends State<TaskListPage> {
         actions: [
           IconButton(
             onPressed: () async {
+              // Legacy chain only: TaskListPage -> CreateTaskPage.
               await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -236,6 +244,10 @@ class _TaskListPageState extends State<TaskListPage> {
                   itemCount: tasks.length,
                   itemBuilder: (context, index) {
                     final task = tasks[index];
+                    final skillNames = task.skillRequirements
+                        .map((requirement) => requirement.skillName)
+                        .where((name) => name.isNotEmpty)
+                        .join(', ');
 
                     return Card(
                       margin: const EdgeInsets.symmetric(
@@ -266,6 +278,13 @@ class _TaskListPageState extends State<TaskListPage> {
                                     'Estimasi: ${task.estimatedHours} jam',
                                     style: const TextStyle(fontSize: 12),
                                   ),
+                                  if (skillNames.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Skill: $skillNames',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ],
                                   const SizedBox(height: 4),
                                   Text(
                                     'Status: ${formatStatus(task.status)}',

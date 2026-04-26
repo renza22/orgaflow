@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/models/project_model.dart';
-import '../presenters/create_project_presenter.dart';
-import '../../../task/presentation/pages/task_list_page.dart';
+import '../../features/project/domain/models/project_model.dart';
+import '../../features/project/presentation/presenters/create_project_presenter.dart';
+import 'task_list_page.dart';
 
+/*
+LEGACY FLOW:
+This page belongs to the old setup/project/task flow and is not part of the
+current primary app flow. Current primary flow uses OnboardingPage,
+ProjectsPage, and ProjectBoardPage Kanban modal. Keep this file for reference
+only until safe removal.
+*/
 class CreateProjectPage extends StatefulWidget {
   const CreateProjectPage({super.key});
 
@@ -48,6 +55,7 @@ class _CreateProjectPageState extends State<CreateProjectPage> {
 
       if (!mounted) return;
 
+      // Legacy chain only: CreateProjectPage -> TaskListPage.
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(

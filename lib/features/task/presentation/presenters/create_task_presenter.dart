@@ -1,6 +1,7 @@
 import '../../../../core/result/result.dart';
 import '../../data/repositories/task_repository.dart';
 import '../../domain/models/task_model.dart';
+import '../../domain/models/task_skill_requirement_model.dart';
 
 class CreateTaskPresenter {
   CreateTaskPresenter({
@@ -15,6 +16,7 @@ class CreateTaskPresenter {
     required String description,
     required int estimatedHours,
     required String priority,
+    required List<TaskSkillRequirementInput> skillRequirements,
   }) {
     return _repository.createTask(
       projectId: projectId,
@@ -22,6 +24,17 @@ class CreateTaskPresenter {
       description: description,
       estimatedHours: estimatedHours,
       priority: priority,
+      skillRequirements: skillRequirements,
     );
+  }
+
+  Future<Result<List<TaskSkillOptionModel>>> fetchActiveSkills() {
+    return _repository.fetchActiveSkills();
+  }
+
+  Future<bool> canManageTasks({
+    bool refresh = false,
+  }) {
+    return _repository.canManageTasks(refresh: refresh);
   }
 }

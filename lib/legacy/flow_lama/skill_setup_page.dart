@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/supabase_config.dart';
-import '../../../project/presentation/pages/create_project_page.dart';
+import '../../core/supabase_config.dart';
+import 'create_project_page.dart';
 
+/*
+LEGACY FLOW:
+This page belongs to the old setup/project/task flow and is not part of the
+current primary app flow. Current primary flow uses OnboardingPage,
+ProjectsPage, and ProjectBoardPage Kanban modal. Keep this file for reference
+only until safe removal.
+*/
 class SkillSetupPage extends StatefulWidget {
   final String memberId;
 
@@ -78,6 +85,7 @@ class _SkillSetupPageState extends State<SkillSetupPage> {
 
       if (!mounted) return;
 
+      // Legacy chain only: SkillSetupPage -> CreateProjectPage.
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
