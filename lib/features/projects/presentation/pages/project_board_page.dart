@@ -530,7 +530,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
           tasks: _tasks,
         );
       case 3:
-        return const TeamTab();
+        return TeamTab(projectId: widget.projectId);
       default:
         return const SizedBox.shrink();
     }
