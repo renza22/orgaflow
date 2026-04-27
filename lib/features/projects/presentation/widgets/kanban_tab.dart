@@ -1,24 +1,35 @@
 import 'package:flutter/material.dart';
+
+import '../../../assignment/domain/models/assignment_member_option.dart';
 import '../../models/task_model.dart';
 
 class KanbanTab extends StatefulWidget {
   final List<Task> tasks;
   final List<KanbanColumn> columns;
   final bool canManageTasks;
+  final List<AssignmentMemberOption> assignableMembers;
+  final bool isLoadingAssignableMembers;
+  final String? assignableMembersError;
   final Future<void> Function(int taskId, TaskStatus newStatus) onMoveTask;
   final VoidCallback onAddTask;
   final ValueChanged<Task> onEditTask;
   final ValueChanged<Task> onDeleteTask;
+  final Future<void> Function(Task task, AssignmentMemberOption member)
+      onAssignTask;
 
   const KanbanTab({
     super.key,
     required this.tasks,
     required this.columns,
     required this.canManageTasks,
+    required this.assignableMembers,
+    required this.isLoadingAssignableMembers,
+    required this.assignableMembersError,
     required this.onMoveTask,
     required this.onAddTask,
     required this.onEditTask,
     required this.onDeleteTask,
+    required this.onAssignTask,
   });
 
   @override
@@ -603,13 +614,163 @@ class _KanbanTabState extends State<KanbanTab> {
       return assignText;
     }
 
-    return InkWell(
-      onTap: () {},
-      borderRadius: BorderRadius.circular(4),
+    return PopupMenuButton<AssignmentMemberOption>(
+      tooltip: 'Assign task',
+      padding: EdgeInsets.zero,
+      offset: const Offset(0, 8),
+      elevation: 8,
+      color: Colors.white,
+      surfaceTintColor: Colors.white,
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      itemBuilder: (context) => _buildAssignMenuItems(),
+      onSelected: (member) async {
+        await widget.onAssignTask(task, member);
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: assignText,
       ),
     );
+  }
+
+  List<PopupMenuEntry<AssignmentMemberOption>> _buildAssignMenuItems() {
+    final items = <PopupMenuEntry<AssignmentMemberOption>>[
+      PopupMenuItem<AssignmentMemberOption>(
+        enabled: false,
+        height: 30,
+        child: Text(
+          'ASSIGN TO',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+            color: Colors.grey.shade500,
+          ),
+        ),
+      ),
+      const PopupMenuDivider(height: 1),
+    ];
+
+    if (widget.isLoadingAssignableMembers) {
+      items.add(
+        const PopupMenuItem<AssignmentMemberOption>(
+          enabled: false,
+          height: 42,
+          child: Text(
+            'Memuat anggota...',
+            style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+          ),
+        ),
+      );
+      return items;
+    }
+
+    final error = widget.assignableMembersError?.trim();
+    if (error != null && error.isNotEmpty) {
+      items.add(
+        PopupMenuItem<AssignmentMemberOption>(
+          enabled: false,
+          height: 42,
+          child: Text(
+            error,
+            style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+      return items;
+    }
+
+    if (widget.assignableMembers.isEmpty) {
+      items.add(
+        const PopupMenuItem<AssignmentMemberOption>(
+          enabled: false,
+          height: 42,
+          child: Text(
+            'Belum ada anggota aktif',
+            style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+          ),
+        ),
+      );
+      return items;
+    }
+
+    items.addAll(
+      widget.assignableMembers.map(
+        (member) => PopupMenuItem<AssignmentMemberOption>(
+          value: member,
+          height: 42,
+          child: _buildAssignMemberRow(member),
+        ),
+      ),
+    );
+
+    return items;
+  }
+
+  Widget _buildAssignMemberRow(AssignmentMemberOption member) {
+    final name = member.fullName.trim().isNotEmpty
+        ? member.fullName.trim()
+        : 'Tanpa Nama';
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: const Color(0xFF6C5CE7).withValues(alpha: 0.18),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              _memberInitials(name),
+              style: const TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6C5CE7),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 9),
+        Flexible(
+          child: Text(
+            name,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF374151),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _memberInitials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .take(2)
+        .toList();
+
+    if (parts.isEmpty) {
+      return '?';
+    }
+
+    return parts.map((part) => part.substring(0, 1).toUpperCase()).join();
   }
 }

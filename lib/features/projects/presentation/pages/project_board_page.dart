@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/widgets/responsive_sidebar.dart';
+import '../../../assignment/domain/models/assignment_member_option.dart';
+import '../../../assignment/presentation/presenters/assign_task_presenter.dart';
 import '../../../dependency/presentation/presenters/manage_dependency_presenter.dart';
 import '../../../task/domain/models/task_skill_requirement_model.dart';
 import '../../../task/presentation/presenters/create_task_presenter.dart';
@@ -31,11 +33,16 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
     with SingleTickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TaskListPresenter _taskListPresenter = TaskListPresenter();
+  final AssignTaskPresenter _assignTaskPresenter = AssignTaskPresenter();
   late TabController _tabController;
 
   List<Task> _tasks = [];
+  List<AssignmentMemberOption> _assignableMembers = [];
   bool _isLoadingTasks = true;
   bool _canManageTasks = false;
+  bool _isLoadingAssignableMembers = false;
+  bool _didLoadAssignableMembers = false;
+  String? _assignableMembersError;
 
   final List<KanbanColumn> _columns = [
     KanbanColumn(
@@ -141,7 +148,52 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
       _canManageTasks = canManageTasks;
       _isLoadingTasks = false;
     });
+
+    if (canManageTasks) {
+      await _loadAssignableMembersIfNeeded();
+    }
+
     return true;
+  }
+
+  Future<void> _loadAssignableMembersIfNeeded() async {
+    if (_didLoadAssignableMembers || _isLoadingAssignableMembers) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingAssignableMembers = true;
+      _assignableMembersError = null;
+      _didLoadAssignableMembers = true;
+    });
+
+    final result = await _assignTaskPresenter.loadMembers();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result.isFailure) {
+      debugPrint(
+        'ProjectBoardPage load assignable members error: '
+        '${result.error!.message}',
+      );
+      setState(() {
+        _assignableMembers = const [];
+        _assignableMembersError = result.error!.message;
+        _isLoadingAssignableMembers = false;
+      });
+      return;
+    }
+
+    debugPrint(
+      'ProjectBoardPage loaded assignable members: ${result.data!.length}',
+    );
+    setState(() {
+      _assignableMembers = result.data!;
+      _assignableMembersError = null;
+      _isLoadingAssignableMembers = false;
+    });
   }
 
   Future<void> _showAddTaskDialog() async {
@@ -338,6 +390,51 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
     await _fetchProjectTasks(showLoading: false);
   }
 
+  Future<void> _assignTask(
+    Task task,
+    AssignmentMemberOption member,
+  ) async {
+    if (!_canManageTasks) {
+      _showMessage('Anda tidak memiliki izin untuk mengelola task.');
+      return;
+    }
+
+    final taskId = task.sourceTaskId?.trim();
+    if (taskId == null || taskId.isEmpty) {
+      _showMessage('Task tidak valid.');
+      return;
+    }
+
+    debugPrint(
+      'ProjectBoardPage assign task selected: taskId=$taskId, '
+      'memberId=${member.id}',
+    );
+
+    final result = await _assignTaskPresenter.assignTask(
+      taskId: taskId,
+      memberId: member.id,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result.isFailure) {
+      _showMessage(result.error!.message);
+      return;
+    }
+
+    final refreshed = await _fetchProjectTasks(showLoading: false);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (refreshed) {
+      _showMessage('Task berhasil ditugaskan');
+    }
+  }
+
   void _showMessage(String message) {
     if (!mounted) {
       return;
@@ -418,10 +515,14 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
           tasks: _tasks,
           columns: _columns,
           canManageTasks: _canManageTasks,
+          assignableMembers: _assignableMembers,
+          isLoadingAssignableMembers: _isLoadingAssignableMembers,
+          assignableMembersError: _assignableMembersError,
           onMoveTask: _moveTask,
           onAddTask: _showAddTaskDialog,
           onEditTask: _showEditTaskDialog,
           onDeleteTask: _confirmDeleteTask,
+          onAssignTask: _assignTask,
         );
       case 2:
         return WorkflowTab(
