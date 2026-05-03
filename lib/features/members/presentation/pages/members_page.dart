@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../models/member_model.dart';
 import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
+import '../../../../core/navigation/no_transition_page_route.dart';
+import 'member_profile_page.dart';
 
 class MembersPage extends StatefulWidget {
   const MembersPage({super.key});
@@ -142,49 +144,24 @@ class _MembersPageState extends State<MembersPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Page Title
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Kelola Anggota',
-                              style: TextStyle(
-                                fontSize: isSmallScreen ? 24 : 28,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Daftar anggota dengan status kapasitas kerja',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
+                      Text(
+                        'Kelola Anggota',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 24 : 28,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (!isSmallScreen)
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Tambah anggota baru')),
-                            );
-                          },
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Tambah Anggota'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6C5CE7),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Daftar anggota dengan status kapasitas kerja',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
                         ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -205,17 +182,6 @@ class _MembersPageState extends State<MembersPage> {
           ),
         ],
       ),
-      floatingActionButton: isSmallScreen
-          ? FloatingActionButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Tambah anggota baru')),
-                );
-              },
-              backgroundColor: const Color(0xFF6C5CE7),
-              child: const Icon(Icons.add),
-            )
-          : null,
     );
   }
 
@@ -357,8 +323,10 @@ class _MembersPageState extends State<MembersPage> {
       builder: (context, constraints) {
         int crossAxisCount = 1;
         if (constraints.maxWidth >= 1200) {
+          crossAxisCount = 4;
+        } else if (constraints.maxWidth >= 900) {
           crossAxisCount = 3;
-        } else if (constraints.maxWidth >= 768) {
+        } else if (constraints.maxWidth >= 600) {
           crossAxisCount = 2;
         }
 
@@ -367,9 +335,9 @@ class _MembersPageState extends State<MembersPage> {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 24,
-            mainAxisSpacing: 24,
-            childAspectRatio: 0.95,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 1.45,
           ),
           itemCount: members.length,
           itemBuilder: (context, index) {
@@ -386,13 +354,19 @@ class _MembersPageState extends State<MembersPage> {
 
     return InkWell(
       onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Membuka detail ${member.name}')),
+        Navigator.push(
+          context,
+          NoTransitionPageRoute(
+            builder: (context) => MemberProfilePage(
+              memberId: member.id,
+              memberName: member.name,
+            ),
+          ),
         );
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -414,8 +388,8 @@ class _MembersPageState extends State<MembersPage> {
                 Stack(
                   children: [
                     Container(
-                      width: 48,
-                      height: 48,
+                      width: 40,
+                      height: 40,
                       decoration: const BoxDecoration(
                         color: Color(0xFF6C5CE7),
                         shape: BoxShape.circle,
@@ -425,7 +399,7 @@ class _MembersPageState extends State<MembersPage> {
                           member.initials,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 14,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -435,8 +409,8 @@ class _MembersPageState extends State<MembersPage> {
                       bottom: 0,
                       right: 0,
                       child: Container(
-                        width: 12,
-                        height: 12,
+                        width: 10,
+                        height: 10,
                         decoration: BoxDecoration(
                           color: statusConfig.color,
                           shape: BoxShape.circle,
@@ -446,7 +420,7 @@ class _MembersPageState extends State<MembersPage> {
                     ),
                   ],
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -454,14 +428,14 @@ class _MembersPageState extends State<MembersPage> {
                       Text(
                         member.name,
                         style: const TextStyle(
-                          fontSize: 15,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       Text(
                         member.role,
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           color: Colors.grey.shade600,
                         ),
                       ),
@@ -470,18 +444,18 @@ class _MembersPageState extends State<MembersPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 6),
 
             // Email and Tasks
             Row(
               children: [
-                Icon(Icons.email_outlined, size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 8),
+                Icon(Icons.email_outlined, size: 14, color: Colors.grey.shade600),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     member.email,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 11,
                       color: Colors.grey.shade600,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -489,95 +463,91 @@ class _MembersPageState extends State<MembersPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Row(
               children: [
-                Icon(Icons.work_outline, size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 8),
+                Icon(Icons.work_outline, size: 14, color: Colors.grey.shade600),
+                const SizedBox(width: 6),
                 Text(
                   '${member.tasksCount} active tasks',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 11,
                     color: Colors.grey.shade600,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 6),
 
             // Skills
             Wrap(
-              spacing: 6,
-              runSpacing: 6,
+              spacing: 4,
+              runSpacing: 4,
               children: member.skills.map((skill) {
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(6),
+                    color: const Color(0xFF00CEC9),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     skill,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w500,
+                      color: Colors.white,
                     ),
                   ),
                 );
               }).toList(),
             ),
-            const Spacer(),
+            const SizedBox(height: 12),
 
             // Capacity Bar
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Capacity',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                        ),
+            Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Capacity',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
                       ),
-                      Text(
-                        '${member.capacityUsed}/${member.capacityMax}h',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: statusConfig.color,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: loadRatio / 100,
-                      backgroundColor: Colors.grey.shade200,
-                      color: statusConfig.color,
-                      minHeight: 8,
                     ),
+                    Text(
+                      '${member.capacityUsed}/${member.capacityMax}h',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: statusConfig.color,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: loadRatio / 100,
+                    backgroundColor: Colors.grey.shade200,
+                    color: statusConfig.color,
+                    minHeight: 8,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
+                ),
+                const SizedBox(height: 6),
+                Center(
+                  child: Text(
                     '${statusConfig.label} (${loadRatio.toStringAsFixed(0)}%)',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w500,
                       color: statusConfig.color,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),
