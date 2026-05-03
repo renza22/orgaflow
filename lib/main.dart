@@ -8,6 +8,7 @@ import 'features/auth/presentation/pages/reset_password_page.dart';
 import 'features/auth/presentation/pages/session_resolver_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
 import 'features/organization/presentation/pages/organization_choice_page.dart';
+import 'features/organization/presentation/pages/organization_settings_page.dart';
 import 'features/onboarding/presentation/pages/onboarding_page.dart'
     as onboarding;
 import 'features/dashboard/presentation/pages/dashboard_page.dart';
@@ -36,18 +37,64 @@ class MyApp extends StatelessWidget {
       title: 'OrgaFlow',
       debugShowCheckedModeBanner: false,
       navigatorObservers: [appRouteObserver],
+      theme: ThemeData(
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: ZoomPageTransitionsBuilder(),
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+          },
+        ),
+      ),
       home: const SessionResolverPage(),
-      routes: {
-        '/auth': (context) => const AuthPage(),
-        '/forgot-password': (context) => const ForgotPasswordPage(),
-        '/reset-password': (context) => const ResetPasswordPage(),
-        '/organization': (context) => const OrganizationChoicePage(),
-        '/onboarding': (context) => const onboarding.OnboardingPage(),
-        '/dashboard': (context) => const DashboardPage(),
-        '/profile': (context) => const ProfilePage(),
-        '/members': (context) => const MembersPage(),
-        '/projects': (context) => const ProjectsPage(),
-        '/fairness': (context) => const FairnessDashboardPage(),
+      onGenerateRoute: (settings) {
+        Widget page;
+        switch (settings.name) {
+          case '/auth':
+            page = const AuthPage();
+            break;
+          case '/forgot-password':
+            page = const ForgotPasswordPage();
+            break;
+          case '/reset-password':
+            page = const ResetPasswordPage();
+            break;
+          case '/organization':
+            page = const OrganizationChoicePage();
+            break;
+          case '/onboarding':
+            page = const onboarding.OnboardingPage();
+            break;
+          case '/dashboard':
+            page = const DashboardPage();
+            break;
+          case '/profile':
+            page = const ProfilePage();
+            break;
+          case '/members':
+            page = const MembersPage();
+            break;
+          case '/projects':
+            page = const ProjectsPage();
+            break;
+          case '/fairness':
+            page = const FairnessDashboardPage();
+            break;
+          case '/organization-settings':
+            page = const OrganizationSettingsPage();
+            break;
+          default:
+            page = const SessionResolverPage();
+        }
+        
+        return PageRouteBuilder(
+          settings: settings,
+          pageBuilder: (context, animation, secondaryAnimation) => page,
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+        );
       },
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/navigation/app_route_observer.dart';
+import '../../../../core/navigation/no_transition_page_route.dart';
 import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
 import '../../../project/presentation/presenters/projects_presenter.dart';
@@ -146,7 +147,7 @@ class _ProjectsPageState extends State<ProjectsPage> with RouteAware {
   void _openProjectBoard(ProjectDetail project) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      NoTransitionPageRoute(
         builder: (context) => ProjectBoardPage(
           projectId: project.id,
           projectName: project.name,

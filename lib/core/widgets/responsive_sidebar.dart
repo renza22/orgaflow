@@ -113,9 +113,9 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
                 ),
                 _buildMenuItem(
                   context,
-                  icon: Icons.settings_outlined,
-                  title: 'Settings',
-                  route: '/settings',
+                  icon: Icons.business_outlined,
+                  title: 'Kelola Organisasi',
+                  route: '/organization-settings',
                 ),
               ],
             ),
@@ -177,28 +177,12 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
             ),
             child: _isCollapsed
                 ? Center(
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF6C5CE7),
-                        shape: BoxShape.circle,
+                    child: PopupMenuButton<String>(
+                      offset: const Offset(0, -120),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Center(
-                        child: Text(
-                          'AD',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                : Row(
-                    children: [
-                      Container(
+                      child: Container(
                         width: 40,
                         height: 40,
                         decoration: const BoxDecoration(
@@ -216,33 +200,152 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Admin',
+                      itemBuilder: (context) => [
+                        PopupMenuItem<String>(
+                          value: 'profile',
+                          child: Row(
+                            children: [
+                              Icon(Icons.person_outline, size: 20, color: Colors.grey.shade700),
+                              const SizedBox(width: 12),
+                              const Text('Profile'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem<String>(
+                          value: 'logout',
+                          child: Row(
+                            children: [
+                              Icon(Icons.logout, size: 20, color: Colors.grey.shade700),
+                              const SizedBox(width: 12),
+                              const Text('Logout'),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onSelected: (value) {
+                        if (value == 'profile') {
+                          Navigator.pushNamed(context, '/profile');
+                        } else if (value == 'logout') {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Logout functionality coming soon')),
+                          );
+                        }
+                      },
+                    ),
+                  )
+                : PopupMenuButton<String>(
+                    offset: const Offset(0, -120),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF6C5CE7),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'AD',
                               style: TextStyle(
-                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
                                 fontSize: 14,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                            Text(
-                              'Ketua Organisasi',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Admin',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                              Text(
+                                'Ketua Organisasi',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.more_vert, size: 20, color: Colors.grey.shade600),
+                      ],
+                    ),
+                    itemBuilder: (context) => [
+                      PopupMenuItem<String>(
+                        padding: EdgeInsets.zero,
+                        enabled: false,
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Admin',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'admin@orgaflow.com',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const PopupMenuDivider(),
+                      PopupMenuItem<String>(
+                        value: 'profile',
+                        child: Row(
+                          children: [
+                            Icon(Icons.person_outline, size: 20, color: Colors.grey.shade700),
+                            const SizedBox(width: 12),
+                            const Text('Profile'),
                           ],
                         ),
                       ),
-                      Icon(Icons.more_vert, size: 20, color: Colors.grey.shade600),
+                      PopupMenuItem<String>(
+                        value: 'logout',
+                        child: Row(
+                          children: [
+                            Icon(Icons.logout, size: 20, color: Colors.grey.shade700),
+                            const SizedBox(width: 12),
+                            const Text('Logout'),
+                          ],
+                        ),
+                      ),
                     ],
+                    onSelected: (value) {
+                      if (value == 'profile') {
+                        Navigator.pushNamed(context, '/profile');
+                      } else if (value == 'logout') {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Logout functionality coming soon')),
+                        );
+                      }
+                    },
                   ),
           ),
         ],
@@ -263,11 +366,7 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
       message: _isCollapsed ? title : '',
       child: InkWell(
         onTap: () {
-          if (route == '/settings') {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Settings page coming soon')),
-            );
-          } else if (route == '/dashboard' || route == '/') {
+          if (route == '/dashboard' || route == '/') {
             Navigator.pushReplacementNamed(context, '/dashboard');
           } else {
             Navigator.pushReplacementNamed(context, route);
