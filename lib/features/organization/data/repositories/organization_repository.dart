@@ -7,6 +7,8 @@ import '../../../onboarding/domain/models/master_option.dart';
 import '../../domain/models/create_organization_input.dart';
 import '../../domain/models/join_organization_input.dart';
 import '../../domain/models/organization_membership_result.dart';
+import '../../domain/models/organization_settings_model.dart';
+import '../../domain/models/update_organization_settings_input.dart';
 import '../datasources/organization_remote_datasource.dart';
 
 class OrganizationRepository {
@@ -25,6 +27,40 @@ class OrganizationRepository {
       return Result<List<MasterOption>>.success(items);
     } catch (error) {
       return Result<List<MasterOption>>.failure(ErrorMapper.map(error));
+    }
+  }
+
+  Future<Result<OrganizationSettingsModel>> fetchOrganizationSettings(
+    String organizationId,
+  ) async {
+    try {
+      final settings =
+          await _remoteDatasource.fetchOrganizationSettings(organizationId);
+      return Result<OrganizationSettingsModel>.success(settings);
+    } catch (error) {
+      return Result<OrganizationSettingsModel>.failure(ErrorMapper.map(error));
+    }
+  }
+
+  Future<Result<OrganizationSettingsModel>> updateOrganizationSettings(
+    UpdateOrganizationSettingsInput input,
+  ) async {
+    try {
+      final settings =
+          await _remoteDatasource.updateOrganizationSettings(input);
+      await _sessionService.clearCache();
+      return Result<OrganizationSettingsModel>.success(settings);
+    } catch (error) {
+      return Result<OrganizationSettingsModel>.failure(ErrorMapper.map(error));
+    }
+  }
+
+  Future<Result<List<String>>> fetchActiveSkillNames() async {
+    try {
+      final items = await _remoteDatasource.fetchActiveSkillNames();
+      return Result<List<String>>.success(items);
+    } catch (error) {
+      return Result<List<String>>.failure(ErrorMapper.map(error));
     }
   }
 
