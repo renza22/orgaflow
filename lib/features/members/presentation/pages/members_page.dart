@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../models/member_model.dart';
+
+import '../../../../core/navigation/no_transition_page_route.dart';
 import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
-import '../../../../core/navigation/no_transition_page_route.dart';
+import '../../models/member_model.dart';
+import '../presenters/members_presenter.dart';
 import 'member_profile_page.dart';
 
 class MembersPage extends StatefulWidget {
@@ -14,101 +16,84 @@ class MembersPage extends StatefulWidget {
 
 class _MembersPageState extends State<MembersPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final MembersPresenter _presenter = MembersPresenter();
+
   String _searchQuery = '';
   String _selectedSkill = 'All Skills';
+  List<Member> _members = const [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
-  final List<Member> _members = [
-    Member(
-      id: 1,
-      name: "Sarah Chen",
-      role: "Lead Designer",
-      email: "sarah.chen@org.com",
-      capacityMax: 40,
-      capacityUsed: 37,
-      skills: ["UI/UX", "Creative", "Prototyping"],
-      status: MemberStatus.overloaded,
-      tasksCount: 12,
-    ),
-    Member(
-      id: 2,
-      name: "Mike Johnson",
-      role: "Senior Developer",
-      email: "mike.j@org.com",
-      capacityMax: 40,
-      capacityUsed: 35,
-      skills: ["Backend", "Python", "Database"],
-      status: MemberStatus.warning,
-      tasksCount: 15,
-    ),
-    Member(
-      id: 3,
-      name: "Emma Davis",
-      role: "Product Manager",
-      email: "emma.d@org.com",
-      capacityMax: 35,
-      capacityUsed: 30,
-      skills: ["Management", "Planning", "Communication"],
-      status: MemberStatus.warning,
-      tasksCount: 10,
-    ),
-    Member(
-      id: 4,
-      name: "Alex Kim",
-      role: "DevOps Engineer",
-      email: "alex.kim@org.com",
-      capacityMax: 40,
-      capacityUsed: 29,
-      skills: ["DevOps", "Cloud", "Automation"],
-      status: MemberStatus.active,
-      tasksCount: 8,
-    ),
-    Member(
-      id: 5,
-      name: "Tom Wilson",
-      role: "QA Engineer",
-      email: "tom.w@org.com",
-      capacityMax: 40,
-      capacityUsed: 27,
-      skills: ["Testing", "QA", "Automation"],
-      status: MemberStatus.active,
-      tasksCount: 9,
-    ),
-    Member(
-      id: 6,
-      name: "Lisa Anderson",
-      role: "Marketing Lead",
-      email: "lisa.a@org.com",
-      capacityMax: 35,
-      capacityUsed: 23,
-      skills: ["Marketing", "Content", "Social Media"],
-      status: MemberStatus.active,
-      tasksCount: 7,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadMembers();
+  }
 
-  final List<String> _skillCategories = [
-    "All Skills",
-    "UI/UX",
-    "Backend",
-    "Frontend",
-    "DevOps",
-    "Management",
-    "Marketing"
-  ];
+  Future<void> _loadMembers() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await _presenter.loadMembers();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result.isFailure) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = result.error!.message;
+      });
+      return;
+    }
+
+    final members = result.data!;
+    final skillOptions = _buildSkillOptions(members);
+
+    setState(() {
+      _members = members;
+      if (!skillOptions.contains(_selectedSkill)) {
+        _selectedSkill = 'All Skills';
+      }
+      _isLoading = false;
+      _errorMessage = null;
+    });
+  }
 
   List<Member> get _filteredMembers {
     return _members.where((member) {
-      final matchesSearch = member.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesSearch = member.matchesQuery(_searchQuery);
       final matchesSkill = _selectedSkill == 'All Skills' ||
-          member.skills.any((skill) => skill.toLowerCase().contains(_selectedSkill.toLowerCase()));
+          member.skills.any(
+            (skill) => skill.toLowerCase() == _selectedSkill.toLowerCase(),
+          );
       return matchesSearch && matchesSkill;
     }).toList();
   }
 
-  int get _totalMembers => 24;
-  int get _healthyCount => 18;
-  int get _warningCount => 3;
-  int get _overloadedCount => 3;
+  List<String> get _skillCategories => _buildSkillOptions(_members);
+
+  int get _totalMembers => _members.length;
+  int get _safeCount => _countByStatus(MemberStatus.safe);
+  int get _warningCount => _countByStatus(MemberStatus.warning);
+  int get _criticalCount => _countByStatus(MemberStatus.critical);
+  int get _overloadCount => _countByStatus(MemberStatus.overload);
+  int get _noCapacityCount => _countByStatus(MemberStatus.noCapacity);
+
+  int _countByStatus(MemberStatus status) {
+    return _members.where((member) => member.status == status).length;
+  }
+
+  List<String> _buildSkillOptions(List<Member> members) {
+    final skills = members.expand((member) => member.skills).toSet().toList()
+      ..sort((left, right) => left.toLowerCase().compareTo(
+            right.toLowerCase(),
+          ));
+    return ['All Skills', ...skills];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -132,50 +117,17 @@ class _MembersPageState extends State<MembersPage> {
           : null,
       body: Row(
         children: [
-          // Sidebar for desktop
           if (!isSmallScreen && !isMediumScreen)
             const ResponsiveSidebar(currentRoute: '/members'),
-          
-          // Main Content
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Page Title
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Kelola Anggota',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 24 : 28,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Daftar anggota dengan status kapasitas kerja',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
+                  _buildPageTitle(isSmallScreen),
                   const SizedBox(height: 24),
-
-                  // Stats Cards
-                  _buildStatsCards(isSmallScreen),
-                  const SizedBox(height: 24),
-
-                  // Search and Filters
-                  _buildSearchAndFilters(isSmallScreen),
-                  const SizedBox(height: 24),
-
-                  // Members Grid
-                  _buildMembersGrid(isSmallScreen),
+                  _buildBodyContent(isSmallScreen),
                 ],
               ),
             ),
@@ -185,42 +137,168 @@ class _MembersPageState extends State<MembersPage> {
     );
   }
 
-  Widget _buildStatsCards(bool isSmallScreen) {
-    if (isSmallScreen) {
-      return Column(
-        children: [
-          _buildStatCard('Total Members', '$_totalMembers', null, null),
-          const SizedBox(height: 12),
-          _buildStatCard('Healthy', '$_healthyCount', Colors.green, Colors.green.shade50),
-          const SizedBox(height: 12),
-          _buildStatCard('Warning', '$_warningCount', Colors.orange, Colors.orange.shade50),
-          const SizedBox(height: 12),
-          _buildStatCard('Overloaded', '$_overloadedCount', Colors.red, Colors.red.shade50),
-        ],
-      );
-    }
-
-    return Row(
+  Widget _buildPageTitle(bool isSmallScreen) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: _buildStatCard('Total Members', '$_totalMembers', null, null)),
-        const SizedBox(width: 16),
-        Expanded(child: _buildStatCard('Healthy', '$_healthyCount', Colors.green, Colors.green.shade50)),
-        const SizedBox(width: 16),
-        Expanded(child: _buildStatCard('Warning', '$_warningCount', Colors.orange, Colors.orange.shade50)),
-        const SizedBox(width: 16),
-        Expanded(child: _buildStatCard('Overloaded', '$_overloadedCount', Colors.red, Colors.red.shade50)),
+        Text(
+          'Kelola Anggota',
+          style: TextStyle(
+            fontSize: isSmallScreen ? 24 : 28,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Daftar anggota dengan status kapasitas kerja',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey.shade600,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildStatCard(String label, String value, Color? textColor, Color? bgColor) {
+  Widget _buildBodyContent(bool isSmallScreen) {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 48),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return _buildErrorState(_errorMessage!);
+    }
+
+    if (_members.isEmpty) {
+      return _buildEmptyState('Belum ada anggota.');
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildStatsCards(isSmallScreen),
+        const SizedBox(height: 24),
+        _buildSearchAndFilters(),
+        const SizedBox(height: 24),
+        _buildMembersGrid(isSmallScreen),
+      ],
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(48),
+        child: Column(
+          children: [
+            Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: _loadMembers,
+              child: const Text('Coba Lagi'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(48),
+        child: Column(
+          children: [
+            Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatsCards(bool isSmallScreen) {
+    final cards = [
+      _StatCardData('Total', '$_totalMembers', null, null),
+      _StatCardData(
+          'Aman', '$_safeCount', Colors.green.shade700, Colors.green.shade50),
+      _StatCardData('Warning', '$_warningCount', Colors.orange.shade700,
+          Colors.orange.shade50),
+      _StatCardData('Critical', '$_criticalCount', Colors.red.shade600,
+          Colors.red.shade50),
+      _StatCardData('Overload', '$_overloadCount', Colors.red.shade900,
+          Colors.red.shade50),
+      _StatCardData('No Capacity', '$_noCapacityCount', Colors.grey.shade700,
+          Colors.grey.shade100),
+    ];
+
+    if (isSmallScreen) {
+      return Column(
+        children: [
+          for (final card in cards) ...[
+            _buildStatCard(
+              card.label,
+              card.value,
+              card.textColor,
+              card.backgroundColor,
+            ),
+            if (card != cards.last) const SizedBox(height: 12),
+          ],
+        ],
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1100 ? 6 : 3;
+        final cardWidth = (constraints.maxWidth - (columns - 1) * 12) / columns;
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (final card in cards)
+              SizedBox(
+                width: cardWidth,
+                child: _buildStatCard(
+                  card.label,
+                  card.value,
+                  card.textColor,
+                  card.backgroundColor,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStatCard(
+    String label,
+    String value,
+    Color? textColor,
+    Color? bgColor,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: bgColor ?? Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: textColor?.withOpacity(0.2) ?? Colors.grey.shade200,
+          color: textColor?.withValues(alpha: 0.2) ?? Colors.grey.shade200,
         ),
       ),
       child: Column(
@@ -247,10 +325,11 @@ class _MembersPageState extends State<MembersPage> {
     );
   }
 
-  Widget _buildSearchAndFilters(bool isSmallScreen) {
+  Widget _buildSearchAndFilters() {
+    final skillCategories = _skillCategories;
+
     return Column(
       children: [
-        // Search Bar
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -264,25 +343,26 @@ class _MembersPageState extends State<MembersPage> {
               });
             },
             decoration: InputDecoration(
-              hintText: 'Search members...',
+              hintText: 'Cari anggota...',
               hintStyle: TextStyle(color: Colors.grey.shade400),
               prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
             ),
           ),
         ),
         const SizedBox(height: 16),
-
-        // Skill Filters
         SizedBox(
           height: 40,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: _skillCategories.length,
+            itemCount: skillCategories.length,
             separatorBuilder: (context, index) => const SizedBox(width: 8),
             itemBuilder: (context, index) {
-              final skill = _skillCategories[index];
+              final skill = skillCategories[index];
               final isSelected = _selectedSkill == skill;
               return InkWell(
                 onTap: () {
@@ -292,9 +372,14 @@ class _MembersPageState extends State<MembersPage> {
                 },
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFF6C5CE7) : Colors.grey.shade200,
+                    color: isSelected
+                        ? const Color(0xFF6C5CE7)
+                        : Colors.grey.shade200,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Center(
@@ -303,7 +388,8 @@ class _MembersPageState extends State<MembersPage> {
                       style: TextStyle(
                         fontSize: 13,
                         color: isSelected ? Colors.white : Colors.grey.shade700,
-                        fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                        fontWeight:
+                            isSelected ? FontWeight.w500 : FontWeight.normal,
                       ),
                     ),
                   ),
@@ -318,6 +404,10 @@ class _MembersPageState extends State<MembersPage> {
 
   Widget _buildMembersGrid(bool isSmallScreen) {
     final members = _filteredMembers;
+
+    if (members.isEmpty) {
+      return _buildEmptyState('Tidak ada anggota yang cocok.');
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -337,7 +427,7 @@ class _MembersPageState extends State<MembersPage> {
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: 1.45,
+            childAspectRatio: isSmallScreen ? 1.05 : 1.15,
           ),
           itemCount: members.length,
           itemBuilder: (context, index) {
@@ -350,7 +440,7 @@ class _MembersPageState extends State<MembersPage> {
 
   Widget _buildMemberCard(Member member) {
     final statusConfig = member.statusConfig;
-    final loadRatio = member.loadRatio;
+    final percentage = member.displayLoadPercentage;
 
     return InkWell(
       onTap: () {
@@ -373,7 +463,7 @@ class _MembersPageState extends State<MembersPage> {
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -382,7 +472,6 @@ class _MembersPageState extends State<MembersPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Avatar and Name
             Row(
               children: [
                 Stack(
@@ -431,13 +520,17 @@ class _MembersPageState extends State<MembersPage> {
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        member.role,
+                        member.displayRole,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -445,65 +538,17 @@ class _MembersPageState extends State<MembersPage> {
               ],
             ),
             const SizedBox(height: 6),
-
-            // Email and Tasks
-            Row(
-              children: [
-                Icon(Icons.email_outlined, size: 14, color: Colors.grey.shade600),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    member.email,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade600,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
+            _buildIconText(Icons.email_outlined, member.email),
             const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.work_outline, size: 14, color: Colors.grey.shade600),
-                const SizedBox(width: 6),
-                Text(
-                  '${member.tasksCount} active tasks',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
+            _buildIconText(Icons.account_tree_outlined, member.displayDivision),
+            const SizedBox(height: 4),
+            _buildIconText(
+              Icons.work_outline,
+              '${member.activeTaskCount} active tasks',
             ),
-            const SizedBox(height: 6),
-
-            // Skills
-            Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: member.skills.map((skill) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00CEC9),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    skill,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 12),
-
-            // Capacity Bar
+            const SizedBox(height: 8),
+            _buildSkillChips(member),
+            const Spacer(),
             Column(
               children: [
                 Row(
@@ -517,7 +562,9 @@ class _MembersPageState extends State<MembersPage> {
                       ),
                     ),
                     Text(
-                      '${member.capacityUsed}/${member.capacityMax}h',
+                      member.capacityMax <= 0
+                          ? 'Belum set kapasitas'
+                          : '${member.capacityUsed}/${member.capacityMax} jam',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -530,7 +577,7 @@ class _MembersPageState extends State<MembersPage> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: loadRatio / 100,
+                    value: member.progressValue,
                     backgroundColor: Colors.grey.shade200,
                     color: statusConfig.color,
                     minHeight: 8,
@@ -539,7 +586,7 @@ class _MembersPageState extends State<MembersPage> {
                 const SizedBox(height: 6),
                 Center(
                   child: Text(
-                    '${statusConfig.label} (${loadRatio.toStringAsFixed(0)}%)',
+                    '${statusConfig.label} (${percentage.toStringAsFixed(0)}%)',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
@@ -554,4 +601,85 @@ class _MembersPageState extends State<MembersPage> {
       ),
     );
   }
+
+  Widget _buildIconText(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: Colors.grey.shade600),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text.isEmpty ? '-' : text,
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSkillChips(Member member) {
+    if (member.skills.isEmpty) {
+      return Text(
+        'Belum ada skill',
+        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+      );
+    }
+
+    final visibleSkills = member.skills.take(3).toList();
+    final hiddenCount = member.skills.length - visibleSkills.length;
+
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (final skill in visibleSkills)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00CEC9),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              skill,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        if (hiddenCount > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              '+$hiddenCount',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _StatCardData {
+  const _StatCardData(
+    this.label,
+    this.value,
+    this.textColor,
+    this.backgroundColor,
+  );
+
+  final String label;
+  final String value;
+  final Color? textColor;
+  final Color? backgroundColor;
 }

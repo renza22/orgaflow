@@ -152,6 +152,7 @@ class _ProjectsPageState extends State<ProjectsPage> with RouteAware {
           projectId: project.id,
           projectName: project.name,
           projectDescription: project.description,
+          projectDueDate: project.dueDate,
         ),
       ),
     );
