@@ -9,6 +9,9 @@ class WorkloadRemoteDatasource {
     SupabaseClient? client,
   }) : _client = client ?? supabase;
 
+  // Task 61: only todo and in_progress count toward active workload.
+  static const _activeWorkloadStatuses = {'todo', 'in_progress'};
+
   final SupabaseClient _client;
 
   Future<List<WorkloadItemModel>> fetchWorkload(String organizationId) async {
@@ -26,10 +29,9 @@ class WorkloadRemoteDatasource {
         positionMap: labelMaps.$1,
         divisionMap: labelMaps.$2,
       );
-    } on PostgrestException catch (error) {
-      if (!_isMissingView(error)) {
-        rethrow;
-      }
+    } on PostgrestException {
+      // Fall back to table reads when the workload view is unavailable or not
+      // yet refreshed in Supabase.
     }
 
     return _fetchWorkloadFallback(
@@ -65,6 +67,7 @@ class WorkloadRemoteDatasource {
             .inFilter('member_id', memberIds);
 
     final assignedHoursByMemberId = <String, int>{};
+    final activeTaskCountByMemberId = <String, int>{};
     for (final rawAssignment in assignmentRows) {
       final assignment = Map<String, dynamic>.from(rawAssignment as Map);
       final memberId = assignment['member_id'] as String?;
@@ -72,26 +75,29 @@ class WorkloadRemoteDatasource {
         continue;
       }
 
-      final allocationHours = (assignment['allocation_hours'] as num?)?.toInt();
       final task = _asMap(assignment['tasks']);
       final taskStatus = (task?['status'] as String? ?? '')
           .trim()
           .toLowerCase()
           .replaceAll('-', '_');
 
-      if (taskStatus == 'done') {
+      if (!_activeWorkloadStatuses.contains(taskStatus)) {
         continue;
       }
 
-      int taskHours = allocationHours ?? 0;
-      if (allocationHours == null && task != null) {
-        taskHours = (task['estimated_hours'] as num?)?.toInt() ?? 0;
-      }
+      final taskHours = _readNullableInt(assignment['allocation_hours']) ??
+          _readNullableInt(task?['estimated_hours']) ??
+          0;
 
       assignedHoursByMemberId.update(
         memberId,
         (current) => current + taskHours,
         ifAbsent: () => taskHours,
+      );
+      activeTaskCountByMemberId.update(
+        memberId,
+        (current) => current + 1,
+        ifAbsent: () => 1,
       );
     }
 
@@ -108,11 +114,11 @@ class WorkloadRemoteDatasource {
       }
 
       final weeklyCapacityHours =
-          (member['weekly_capacity_hours'] as num?)?.toInt() ?? 0;
+          _readNullableInt(member['weekly_capacity_hours']) ?? 0;
       final assignedHours =
           assignedHoursByMemberId[member['id'] as String] ?? 0;
       final loadRatio =
-          weeklyCapacityHours == 0 ? 0.0 : assignedHours / weeklyCapacityHours;
+          weeklyCapacityHours <= 0 ? 0.0 : assignedHours / weeklyCapacityHours;
 
       return WorkloadItemModel(
         memberId: member['id'] as String,
@@ -125,7 +131,12 @@ class WorkloadRemoteDatasource {
         divisionLabel: divisionMap[member['division_code'] as String? ?? ''],
         weeklyCapacityHours: weeklyCapacityHours,
         assignedHours: assignedHours,
+        activeTaskCount: activeTaskCountByMemberId[member['id'] as String] ?? 0,
         loadRatio: loadRatio,
+        loadPercentage: loadRatio * 100,
+        warningThreshold: 0.7,
+        criticalThreshold: 0.9,
+        overloadThreshold: 1.0,
         workloadStatus: _buildWorkloadStatus(
           weeklyCapacityHours: weeklyCapacityHours,
           loadRatio: loadRatio,
@@ -183,11 +194,6 @@ class WorkloadRemoteDatasource {
     );
   }
 
-  bool _isMissingView(PostgrestException error) {
-    final message = error.message.toLowerCase();
-    return error.code == 'PGRST205' || message.contains('v_member_workload');
-  }
-
   Map<String, dynamic>? _asMap(dynamic value) {
     if (value is Map<String, dynamic>) {
       return value;
@@ -210,11 +216,21 @@ class WorkloadRemoteDatasource {
     return null;
   }
 
+  int? _readNullableInt(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return num.tryParse(value.toString())?.toInt();
+  }
+
   String _buildWorkloadStatus({
     required int weeklyCapacityHours,
     required double loadRatio,
   }) {
-    if (weeklyCapacityHours == 0) {
+    if (weeklyCapacityHours <= 0) {
       return 'no_capacity';
     }
 
@@ -222,7 +238,11 @@ class WorkloadRemoteDatasource {
       return 'overload';
     }
 
-    if (loadRatio >= 0.8) {
+    if (loadRatio > 0.9) {
+      return 'critical';
+    }
+
+    if (loadRatio >= 0.7) {
       return 'warning';
     }
 
