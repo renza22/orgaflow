@@ -1,6 +1,9 @@
+import 'package:image_picker/image_picker.dart';
+
 import '../../../../core/errors/app_error.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/utils/nim_validator.dart';
+import '../../../profile/data/repositories/profile_repository.dart';
 import '../../data/repositories/onboarding_repository.dart';
 import '../../domain/models/master_option.dart';
 import '../../domain/models/onboarding_initial_data.dart';
@@ -11,9 +14,12 @@ import '../../domain/models/selected_skill_input.dart';
 class OnboardingPresenter {
   OnboardingPresenter({
     OnboardingRepository? repository,
-  }) : _repository = repository ?? OnboardingRepository();
+    ProfileRepository? profileRepository,
+  })  : _repository = repository ?? OnboardingRepository(),
+        _profileRepository = profileRepository ?? ProfileRepository();
 
   final OnboardingRepository _repository;
+  final ProfileRepository _profileRepository;
 
   Future<Result<OnboardingInitialData>> loadInitialData() {
     return _repository.loadInitialData();
@@ -192,6 +198,18 @@ class OnboardingPresenter {
     );
 
     return _repository.submitOnboarding(submission);
+  }
+
+  Future<Result<String>> uploadProfileAvatar({
+    required String profileId,
+    required XFile imageFile,
+    String? existingAvatarPath,
+  }) {
+    return _profileRepository.uploadProfileAvatar(
+      profileId: profileId,
+      imageFile: imageFile,
+      existingAvatarPath: existingAvatarPath,
+    );
   }
 
   int _mapProficiencyToLevel(String proficiency) {

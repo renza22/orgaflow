@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -45,7 +46,9 @@ class _GradientButtonState extends State<_GradientButton> {
     const hoverTeal = Color(0xFF2DD4BF);
 
     return MouseRegion(
-      cursor: widget.onPressed != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      cursor: widget.onPressed != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
@@ -61,7 +64,7 @@ class _GradientButtonState extends State<_GradientButton> {
           boxShadow: _isHovered && widget.onPressed != null
               ? [
                   BoxShadow(
-                    color: purpleColor.withOpacity(0.4),
+                    color: purpleColor.withValues(alpha: 0.4),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -114,7 +117,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
   final OnboardingPresenter _presenter = OnboardingPresenter();
 
   // Step 1: Data Identitas
-  File? profileImage;
+  XFile? pickedProfileImage;
+  Uint8List? pickedProfileImageBytes;
   final namaLengkapController = TextEditingController();
   final nimController = TextEditingController();
   String? selectedProdi;
@@ -163,7 +167,20 @@ class _OnboardingPageState extends State<OnboardingPage> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      setState(() => profileImage = File(pickedFile.path));
+      final bytes = await pickedFile.readAsBytes();
+      if (!mounted) {
+        return;
+      }
+
+      if (bytes.isEmpty) {
+        MessageHelper.showSnackBar(context, 'File foto kosong.');
+        return;
+      }
+
+      setState(() {
+        pickedProfileImage = pickedFile;
+        pickedProfileImageBytes = bytes;
+      });
     }
   }
 
@@ -276,6 +293,45 @@ class _OnboardingPageState extends State<OnboardingPage> {
       );
     }
 
+    var avatarPath = initialData.profile?.avatarPath;
+    final pickedImage = pickedProfileImage;
+    if (pickedImage != null) {
+      final profileId = initialData.profile?.id;
+      if (profileId == null || profileId.isEmpty) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          isSubmitting = false;
+        });
+        MessageHelper.showSnackBar(
+          context,
+          'Profile user tidak ditemukan untuk upload foto.',
+        );
+        return;
+      }
+
+      final uploadResult = await _presenter.uploadProfileAvatar(
+        profileId: profileId,
+        imageFile: pickedImage,
+        existingAvatarPath: initialData.profile?.avatarPath,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (uploadResult.isFailure) {
+        setState(() {
+          isSubmitting = false;
+        });
+        MessageHelper.showSnackBar(context, uploadResult.error!.message);
+        return;
+      }
+
+      avatarPath = uploadResult.data;
+    }
+
     final result = await _presenter.submit(
       initialData: initialData,
       fullName: namaLengkapController.text,
@@ -288,7 +344,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       bio: bioController.text,
       portfolioLinks: portfolioDrafts,
       selectedSkills: selectedSkills,
-      avatarPath: initialData.profile?.avatarPath,
+      avatarPath: avatarPath,
     );
 
     if (!mounted) {
@@ -334,7 +390,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     const purpleColor = Color(0xFF8B5CF6);
-    const tealColor = Color(0xFF14B8A6);
 
     if (isLoadingInitialData) {
       return const Scaffold(
@@ -409,7 +464,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
     const tealColor = Color(0xFF14B8A6);
     final progress = (currentStep + 1) / 4;
     final percentage = ((currentStep + 1) * 25).toInt();
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: SafeArea(
@@ -427,7 +482,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       colors: [purpleColor, tealColor],
                     ),
                   ),
-                  child: const Icon(Icons.person, size: 20, color: Colors.white),
+                  child:
+                      const Icon(Icons.person, size: 20, color: Colors.white),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
@@ -506,7 +562,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
               TextButton(
                 onPressed: previousStep,
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
                 ),
@@ -527,7 +584,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         : 'Lanjut',
                 height: 48,
                 isLoading: currentStep == 3 && isSubmitting,
-                icon: currentStep == 3 ? Icons.check_circle : Icons.arrow_forward,
+                icon:
+                    currentStep == 3 ? Icons.check_circle : Icons.arrow_forward,
               ),
             ),
           ],
@@ -539,7 +597,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Widget _buildStep1(ThemeData theme) {
     const purpleColor = Color(0xFF8B5CF6);
     const tealColor = Color(0xFF14B8A6);
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
       child: Center(
@@ -558,13 +616,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       colors: [purpleColor, tealColor],
                     ),
                   ),
-                  child: const Icon(Icons.person, size: 40, color: Colors.white),
+                  child:
+                      const Icon(Icons.person, size: 40, color: Colors.white),
                 ),
               ),
               const SizedBox(height: 24),
               const Center(
                 child: Text('Step 1: Data Identitas',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 8),
               Center(
@@ -580,13 +640,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     height: 120,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
                       border: Border.all(
                           color: theme.colorScheme.primary, width: 2),
                     ),
-                    child: profileImage != null
+                    child: pickedProfileImageBytes != null
                         ? ClipOval(
-                            child: Image.file(profileImage!, fit: BoxFit.cover))
+                            child: Image.memory(
+                              pickedProfileImageBytes!,
+                              fit: BoxFit.cover,
+                              width: 120,
+                              height: 120,
+                            ),
+                          )
                         : Icon(Icons.add_a_photo,
                             size: 40, color: theme.colorScheme.primary),
                   ),
@@ -631,7 +697,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 label: 'Jabatan',
                 value: selectedJabatan,
                 items: _initialData!.masterData.positions
-                    .where((item) => isOwnerLocked || item.label != 'Ketua Umum')
+                    .where(
+                        (item) => isOwnerLocked || item.label != 'Ketua Umum')
                     .map((item) => item.label)
                     .toList(),
                 onChanged: isOwnerLocked
@@ -667,7 +734,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Widget _buildStep2(ThemeData theme) {
     const purpleColor = Color(0xFF8B5CF6);
     const tealColor = Color(0xFF14B8A6);
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
       child: Center(
@@ -692,7 +759,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
               const SizedBox(height: 24),
               const Center(
                 child: Text('Step 2: Skill Inventory',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 8),
               Center(
@@ -915,19 +983,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
     switch (value) {
       case 'beginner':
         buttonColor = Colors.orange;
-        lightColor = Colors.orange.withOpacity(0.2);
+        lightColor = Colors.orange.withValues(alpha: 0.2);
         break;
       case 'intermediate':
         buttonColor = Colors.teal;
-        lightColor = Colors.teal.withOpacity(0.2);
+        lightColor = Colors.teal.withValues(alpha: 0.2);
         break;
       case 'expert':
         buttonColor = Colors.green;
-        lightColor = Colors.green.withOpacity(0.2);
+        lightColor = Colors.green.withValues(alpha: 0.2);
         break;
       default:
         buttonColor = Colors.grey;
-        lightColor = Colors.grey.withOpacity(0.2);
+        lightColor = Colors.grey.withValues(alpha: 0.2);
     }
 
     return InkWell(
@@ -961,7 +1029,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Widget _buildStep3(ThemeData theme) {
     const purpleColor = Color(0xFF8B5CF6);
     const tealColor = Color(0xFF14B8A6);
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
       child: Center(
@@ -980,13 +1048,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       colors: [purpleColor, tealColor],
                     ),
                   ),
-                  child: const Icon(Icons.schedule, size: 40, color: Colors.white),
+                  child:
+                      const Icon(Icons.schedule, size: 40, color: Colors.white),
                 ),
               ),
               const SizedBox(height: 24),
               const Center(
                 child: Text('Step 3: Capacity & Commitment',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 8),
               Center(
@@ -1005,12 +1075,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.access_time, size: 18, color: Colors.grey),
+                        const Icon(Icons.access_time,
+                            size: 18, color: Colors.grey),
                         const SizedBox(width: 8),
                         const Text('Weekly Capacity (Jam/Minggu)',
                             style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500)),
+                                fontSize: 14, fontWeight: FontWeight.w500)),
                         const Text(' *', style: TextStyle(color: Colors.red)),
                       ],
                     ),
@@ -1045,9 +1115,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                             activeTrackColor: Colors.transparent,
                             inactiveTrackColor: Colors.transparent,
                             thumbColor: purpleColor,
-                            overlayColor: purpleColor.withOpacity(0.1),
+                            overlayColor: purpleColor.withValues(alpha: 0.1),
                             trackHeight: 4,
-                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                            thumbShape: const RoundSliderThumbShape(
+                                enabledThumbRadius: 10),
                           ),
                           child: Slider(
                             value: weeklyCapacity,
@@ -1065,7 +1136,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           child: Column(
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   for (int i = 0; i <= 8; i++)
                                     Container(
@@ -1077,7 +1149,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                               ),
                               const SizedBox(height: 4),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   for (int i = 0; i <= 8; i++)
                                     SizedBox(
@@ -1090,9 +1163,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                           color: weeklyCapacity.toInt() == i * 5
                                               ? purpleColor
                                               : Colors.grey[500],
-                                          fontWeight: weeklyCapacity.toInt() == i * 5
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
+                                          fontWeight:
+                                              weeklyCapacity.toInt() == i * 5
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
                                         ),
                                       ),
                                     ),
@@ -1154,7 +1228,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     Switch(
                       value: isAvailable,
                       onChanged: (value) => setState(() => isAvailable = value),
-                      activeColor: theme.colorScheme.primary,
+                      activeThumbColor: theme.colorScheme.primary,
                     ),
                   ],
                 ),
@@ -1169,7 +1243,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Widget _buildStep4(ThemeData theme) {
     const purpleColor = Color(0xFF8B5CF6);
     const tealColor = Color(0xFF14B8A6);
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
       child: Center(
@@ -1194,7 +1268,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
               const SizedBox(height: 24),
               const Center(
                 child: Text('Portfolio & Social Link',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 8),
               Center(
@@ -1246,7 +1321,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         return Column(
                           children: [
                             DropdownButtonFormField<String>(
-                              value: link.platform,
+                              initialValue: link.platform,
                               decoration: InputDecoration(
                                 hintText: 'Platform',
                                 filled: true,
@@ -1255,15 +1330,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                     horizontal: 16, vertical: 12),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey[300]!),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey[300]!),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFF8B5CF6), width: 2),
                                 ),
                               ),
                               items: _initialData!.masterData.portfolioPlatforms
@@ -1293,15 +1371,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                               horizontal: 16, vertical: 12),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide(color: Colors.grey[300]!),
+                                        borderSide: BorderSide(
+                                            color: Colors.grey[300]!),
                                       ),
                                       enabledBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide(color: Colors.grey[300]!),
+                                        borderSide: BorderSide(
+                                            color: Colors.grey[300]!),
                                       ),
                                       focusedBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                                        borderSide: const BorderSide(
+                                            color: Color(0xFF8B5CF6), width: 2),
                                       ),
                                     ),
                                   ),
@@ -1327,7 +1408,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           Expanded(
                             flex: 1,
                             child: DropdownButtonFormField<String>(
-                              value: link.platform,
+                              initialValue: link.platform,
                               decoration: InputDecoration(
                                 hintText: 'Platform',
                                 filled: true,
@@ -1336,15 +1417,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                     horizontal: 16, vertical: 12),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey[300]!),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey[300]!),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFF8B5CF6), width: 2),
                                 ),
                               ),
                               items: _initialData!.masterData.portfolioPlatforms
@@ -1373,15 +1457,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                     horizontal: 16, vertical: 12),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey[300]!),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey[300]!),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFF8B5CF6), width: 2),
                                 ),
                               ),
                             ),
@@ -1406,7 +1493,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
               Row(
                 children: [
                   const Text('Bio Singkat (opsional)',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 ],
               ),
               const SizedBox(height: 4),
@@ -1432,7 +1520,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                    borderSide:
+                        const BorderSide(color: Color(0xFF8B5CF6), width: 2),
                   ),
                 ),
                 onChanged: (value) => setState(() {}),
@@ -1441,10 +1530,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.05),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                      color: theme.colorScheme.primary.withOpacity(0.2)),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1547,8 +1636,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+              borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
             ),
           ),
           onChanged: (value) => setState(() {}),
@@ -1584,7 +1672,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
         IgnorePointer(
           ignoring: !enabled,
           child: DropdownButtonFormField<String>(
-            value: value,
+            initialValue: value,
             decoration: InputDecoration(
               filled: true,
               fillColor: Colors.white,

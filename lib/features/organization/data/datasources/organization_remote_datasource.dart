@@ -11,6 +11,8 @@ import '../../../onboarding/domain/models/master_option.dart';
 import '../../domain/models/create_organization_input.dart';
 import '../../domain/models/join_organization_input.dart';
 import '../../domain/models/organization_membership_result.dart';
+import '../../domain/models/organization_settings_model.dart';
+import '../../domain/models/update_organization_settings_input.dart';
 
 class OrganizationRemoteDatasource {
   OrganizationRemoteDatasource({
@@ -36,6 +38,55 @@ class OrganizationRemoteDatasource {
 
     return (response as List<dynamic>)
         .map((json) => MasterOption.fromJson(json as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<OrganizationSettingsModel> fetchOrganizationSettings(
+    String organizationId,
+  ) async {
+    final response = await _client.rpc(
+      'get_organization_settings',
+      params: {
+        'p_organization_id': organizationId,
+      },
+    );
+
+    return OrganizationSettingsModel.fromJson(
+      _extractSingleRow(
+        response,
+        fallbackMessage: 'Pengaturan organisasi tidak ditemukan.',
+      ),
+    );
+  }
+
+  Future<OrganizationSettingsModel> updateOrganizationSettings(
+    UpdateOrganizationSettingsInput input,
+  ) async {
+    final response = await _client.rpc(
+      'update_organization_settings',
+      params: input.toRpcParams(),
+    );
+
+    return OrganizationSettingsModel.fromJson(
+      _extractSingleRow(
+        response,
+        fallbackMessage: 'Response update pengaturan organisasi tidak valid.',
+      ),
+    );
+  }
+
+  Future<List<String>> fetchActiveSkillNames() async {
+    final response = await _client
+        .from('skills')
+        .select('name, sort_order')
+        .eq('is_active', true)
+        .order('sort_order', ascending: true)
+        .order('name', ascending: true);
+
+    return (response as List<dynamic>)
+        .map((json) => Map<String, dynamic>.from(json as Map))
+        .map((json) => (json['name'] as String? ?? '').trim())
+        .where((name) => name.isNotEmpty)
         .toList();
   }
 
@@ -313,9 +364,16 @@ class OrganizationRemoteDatasource {
     );
   }
 
-  Map<String, dynamic> _extractSingleRow(dynamic response) {
+  Map<String, dynamic> _extractSingleRow(
+    dynamic response, {
+    String fallbackMessage = 'Response server tidak valid.',
+  }) {
     if (response is Map<String, dynamic>) {
       return response;
+    }
+
+    if (response is Map) {
+      return Map<String, dynamic>.from(response);
     }
 
     if (response is List && response.isNotEmpty) {
@@ -323,10 +381,12 @@ class OrganizationRemoteDatasource {
       if (first is Map<String, dynamic>) {
         return first;
       }
-      return Map<String, dynamic>.from(first as Map);
+      if (first is Map) {
+        return Map<String, dynamic>.from(first);
+      }
     }
 
-    throw const AppError('Response server tidak valid.');
+    throw AppError(fallbackMessage);
   }
 
   String _resolveLogoExtension(XFile imageFile) {

@@ -1799,6 +1799,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
               projectId: project.id,
               projectName: project.name,
               projectDescription: project.description,
+              projectDueDate: project.deadline,
             ),
           ),
         );
@@ -1997,6 +1998,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
               projectId: project.id,
               projectName: project.name,
               projectDescription: project.description,
+              projectDueDate: project.deadline,
             ),
           ),
         );

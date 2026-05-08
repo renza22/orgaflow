@@ -46,11 +46,15 @@ class _WorkloadDashboardPageState extends State<WorkloadDashboardPage> {
   Color statusColor(String status) {
     switch (status) {
       case 'overload':
-        return Colors.red;
+        return Colors.red.shade900;
+      case 'critical':
+        return Colors.red.shade600;
       case 'warning':
-        return Colors.orange;
+        return Colors.orange.shade700;
       case 'safe':
-        return Colors.green;
+        return Colors.green.shade700;
+      case 'no_capacity':
+        return Colors.grey.shade600;
       default:
         return Colors.grey;
     }
@@ -62,14 +66,27 @@ class _WorkloadDashboardPageState extends State<WorkloadDashboardPage> {
     );
   }
 
-  String formatPercent(double ratio) {
-    return '${(ratio * 100).toStringAsFixed(0)}%';
+  String formatPercent(WorkloadItemModel item) {
+    final percentage = item.loadPercentage ?? item.loadRatio * 100;
+    return '${percentage.toStringAsFixed(0)}%';
+  }
+
+  double progressValue(double loadRatio) {
+    if (loadRatio <= 0) {
+      return 0;
+    }
+    if (loadRatio >= 1) {
+      return 1;
+    }
+    return loadRatio;
   }
 
   String formatStatus(String status) {
     switch (status) {
       case 'overload':
         return 'Overload';
+      case 'critical':
+        return 'Critical';
       case 'warning':
         return 'Warning';
       case 'safe':
@@ -122,7 +139,17 @@ class _WorkloadDashboardPageState extends State<WorkloadDashboardPage> {
                             ),
                             Text('Workload: ${item.assignedHours} jam'),
                             Text(
-                              'Load Ratio: ${formatPercent(item.loadRatio)}',
+                              'Load Ratio: ${formatPercent(item)}',
+                            ),
+                            const SizedBox(height: 8),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                value: progressValue(item.loadRatio),
+                                backgroundColor: Colors.grey.shade200,
+                                color: statusColor(item.workloadStatus),
+                                minHeight: 8,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Container(

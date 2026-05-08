@@ -1,29 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/navigation/no_transition_page_route.dart';
+import '../../../../core/utils/storage_avatar_url_resolver.dart';
+import '../../../members/presentation/pages/member_profile_page.dart';
+
 class TeamMember {
   final String id;
+  final String memberId;
   final String name;
   final String role;
   final String initials;
+  final String? avatarSignedUrl;
   final Color avatarColor;
   final int tasksAssigned;
   final int tasksCompleted;
+  final String workloadStatus;
 
   TeamMember({
     required this.id,
+    required this.memberId,
     required this.name,
     required this.role,
     required this.initials,
+    this.avatarSignedUrl,
     required this.avatarColor,
     required this.tasksAssigned,
     required this.tasksCompleted,
+    required this.workloadStatus,
   });
 }
 
 class TeamTab extends StatefulWidget {
   final String projectId;
-  
+
   const TeamTab({super.key, required this.projectId});
 
   @override
@@ -31,6 +41,9 @@ class TeamTab extends StatefulWidget {
 }
 
 class _TeamTabState extends State<TeamTab> {
+  final StorageAvatarUrlResolver _avatarUrlResolver =
+      StorageAvatarUrlResolver();
+
   List<TeamMember> _members = [];
   bool _isLoading = true;
 
@@ -42,31 +55,62 @@ class _TeamTabState extends State<TeamTab> {
 
   Future<void> _loadMembers() async {
     setState(() => _isLoading = true);
-    
+
     try {
-      final response = await Supabase.instance.client
-          .from('project_members')
-          .select('''
+      final response =
+          await Supabase.instance.client.from('project_members').select('''
             id,
             member:members!inner(
               id,
+              organization_id,
               profile:profiles!inner(
                 full_name,
-                email
+                email,
+                avatar_path
               ),
               role,
               position_code
             )
-          ''')
-          .eq('project_id', widget.projectId);
+          ''').eq('project_id', widget.projectId);
 
-      final members = (response as List).map((item) {
+      final projectMemberRows = response as List<dynamic>;
+      final memberIds = projectMemberRows
+          .map((item) => ((item as Map)['member'] as Map?)?['id']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toList();
+      String? organizationId;
+      for (final item in projectMemberRows) {
+        final member = (item as Map)['member'] as Map?;
+        final value = member?['organization_id']?.toString();
+        if (value != null && value.isNotEmpty) {
+          organizationId = value;
+          break;
+        }
+      }
+      final taskStatsByMemberId = await _fetchTaskStatsByMemberId();
+      final workloadStatusByMemberId = await _fetchWorkloadStatusByMemberId(
+        memberIds: memberIds,
+        organizationId: organizationId,
+      );
+      final avatarSignedUrlByPath = await _avatarUrlResolver.resolveMany(
+        projectMemberRows.map((item) {
+          final member = ((item as Map)['member'] as Map?);
+          final profile = member?['profile'] as Map?;
+          return profile?['avatar_path']?.toString();
+        }),
+      );
+
+      final members = projectMemberRows.map((item) {
         final member = item['member'];
         final profile = member['profile'];
+        final memberId = member['id']?.toString() ?? '';
         final fullName = profile['full_name'] ?? 'Unknown';
+        final avatarPath = profile['avatar_path']?.toString();
         final role = member['role'] ?? 'member';
         final positionCode = member['position_code'];
-        
+        final taskStats = taskStatsByMemberId[memberId] ?? _TeamTaskStats.zero;
+
         // Map role to Indonesian
         String displayRole = 'Member';
         if (role == 'owner') {
@@ -76,12 +120,12 @@ class _TeamTabState extends State<TeamTab> {
         } else if (positionCode != null) {
           displayRole = positionCode;
         }
-        
+
         final nameParts = fullName.split(' ');
         final initials = nameParts.length >= 2
             ? '${nameParts[0][0]}${nameParts[1][0]}'.toUpperCase()
             : fullName.substring(0, 2).toUpperCase();
-        
+
         final colors = [
           const Color(0xFF6C5CE7),
           const Color(0xFF00CEC9),
@@ -92,15 +136,20 @@ class _TeamTabState extends State<TeamTab> {
           const Color(0xFFE17055),
         ];
         final colorIndex = fullName.hashCode % colors.length;
-        
+
         return TeamMember(
           id: item['id'],
+          memberId: memberId,
           name: fullName,
           role: displayRole,
           initials: initials,
+          avatarSignedUrl: avatarPath == null
+              ? null
+              : avatarSignedUrlByPath[avatarPath.trim()],
           avatarColor: colors[colorIndex.abs()],
-          tasksAssigned: 0,
-          tasksCompleted: 0,
+          tasksAssigned: taskStats.assigned,
+          tasksCompleted: taskStats.completed,
+          workloadStatus: workloadStatusByMemberId[memberId] ?? 'safe',
         );
       }).toList();
 
@@ -118,6 +167,81 @@ class _TeamTabState extends State<TeamTab> {
     }
   }
 
+  Future<Map<String, _TeamTaskStats>> _fetchTaskStatsByMemberId() async {
+    final taskRows = await Supabase.instance.client
+        .from('tasks')
+        .select('id, status')
+        .eq('project_id', widget.projectId);
+
+    final taskStatusById = <String, String>{};
+    for (final rawTask in taskRows as List<dynamic>) {
+      final task = rawTask as Map;
+      final taskId = task['id']?.toString();
+      if (taskId == null || taskId.isEmpty) {
+        continue;
+      }
+      taskStatusById[taskId] = task['status']?.toString() ?? '';
+    }
+
+    if (taskStatusById.isEmpty) {
+      return const {};
+    }
+
+    final assignmentRows = await Supabase.instance.client
+        .from('task_assignments')
+        .select('task_id, member_id')
+        .inFilter('task_id', taskStatusById.keys.toList());
+
+    final statsByMemberId = <String, _TeamTaskStats>{};
+    for (final rawAssignment in assignmentRows as List<dynamic>) {
+      final assignment = rawAssignment as Map;
+      final taskId = assignment['task_id']?.toString();
+      final memberId = assignment['member_id']?.toString();
+      if (taskId == null ||
+          taskId.isEmpty ||
+          memberId == null ||
+          memberId.isEmpty) {
+        continue;
+      }
+
+      final current = statsByMemberId[memberId] ?? _TeamTaskStats.zero;
+      final isDone = taskStatusById[taskId] == 'done';
+      statsByMemberId[memberId] = _TeamTaskStats(
+        assigned: current.assigned + 1,
+        completed: current.completed + (isDone ? 1 : 0),
+      );
+    }
+
+    return statsByMemberId;
+  }
+
+  Future<Map<String, String>> _fetchWorkloadStatusByMemberId({
+    required List<String> memberIds,
+    required String? organizationId,
+  }) async {
+    if (memberIds.isEmpty) {
+      return const {};
+    }
+
+    final workloadRows = organizationId == null
+        ? await Supabase.instance.client
+            .from('v_member_workload')
+            .select('member_id, workload_status')
+            .inFilter('member_id', memberIds)
+        : await Supabase.instance.client
+            .from('v_member_workload')
+            .select('member_id, workload_status')
+            .eq('organization_id', organizationId)
+            .inFilter('member_id', memberIds);
+
+    return {
+      for (final rawWorkload in workloadRows as List<dynamic>)
+        if ((rawWorkload as Map)['member_id'] != null)
+          rawWorkload['member_id'].toString():
+              rawWorkload['workload_status']?.toString() ?? 'safe',
+    };
+  }
+
   void _showAddMemberDialog() {
     showDialog(
       context: context,
@@ -133,7 +257,8 @@ class _TeamTabState extends State<TeamTab> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Hapus Anggota'),
-        content: Text('Apakah Anda yakin ingin menghapus $memberName dari proyek ini?'),
+        content: Text(
+            'Apakah Anda yakin ingin menghapus $memberName dari proyek ini?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -187,11 +312,19 @@ class _TeamTabState extends State<TeamTab> {
           Row(
             children: [
               const Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Anggota Proyek', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF1F2937))),
-                  SizedBox(height: 4),
-                  Text('Kelola tim yang terlibat dalam proyek ini', style: TextStyle(fontSize: 14, color: Color(0xFF6B7280))),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Anggota Proyek',
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1F2937))),
+                      SizedBox(height: 4),
+                      Text('Kelola tim yang terlibat dalam proyek ini',
+                          style: TextStyle(
+                              fontSize: 14, color: Color(0xFF6B7280))),
+                    ]),
               ),
               ElevatedButton.icon(
                 onPressed: _showAddMemberDialog,
@@ -200,8 +333,10 @@ class _TeamTabState extends State<TeamTab> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6C5CE7),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               ),
             ],
@@ -236,7 +371,7 @@ class _TeamTabState extends State<TeamTab> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: const Color(0xFF6C5CE7).withOpacity(0.1),
+                color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -271,8 +406,10 @@ class _TeamTabState extends State<TeamTab> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6C5CE7),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ],
@@ -288,7 +425,10 @@ class _TeamTabState extends State<TeamTab> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -297,14 +437,37 @@ class _TeamTabState extends State<TeamTab> {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             decoration: BoxDecoration(
               color: Colors.grey.shade50,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
               border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
             ),
             child: Row(children: [
-              const Expanded(flex: 3, child: Text('Anggota', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)))),
-              const Expanded(flex: 2, child: Text('Role', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)))),
-              const Expanded(child: Text('Tasks', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)))),
-              const Expanded(child: Text('Progress', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)))),
+              const Expanded(
+                  flex: 3,
+                  child: Text('Anggota',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6B7280)))),
+              const Expanded(
+                  flex: 2,
+                  child: Text('Role',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6B7280)))),
+              const Expanded(
+                  child: Text('Tasks',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6B7280)))),
+              const Expanded(
+                  child: Text('Progress',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6B7280)))),
               const SizedBox(width: 40),
             ]),
           ),
@@ -318,15 +481,22 @@ class _TeamTabState extends State<TeamTab> {
     final totalTasks = members.fold<int>(0, (s, m) => s + m.tasksAssigned);
     final completedTasks = members.fold<int>(0, (s, m) => s + m.tasksCompleted);
     return Row(children: [
-      Expanded(child: _buildMiniStat('Total Anggota', '${members.length}', Icons.people, const Color(0xFF6C5CE7))),
+      Expanded(
+          child: _buildMiniStat('Total Anggota', '${members.length}',
+              Icons.people, const Color(0xFF6C5CE7))),
       const SizedBox(width: 12),
-      Expanded(child: _buildMiniStat('Total Tasks', '$totalTasks', Icons.task_alt, const Color(0xFF00CEC9))),
+      Expanded(
+          child: _buildMiniStat('Total Tasks', '$totalTasks', Icons.task_alt,
+              const Color(0xFF00CEC9))),
       const SizedBox(width: 12),
-      Expanded(child: _buildMiniStat('Selesai', '$completedTasks', Icons.check_circle, const Color(0xFF00B894))),
+      Expanded(
+          child: _buildMiniStat('Selesai', '$completedTasks',
+              Icons.check_circle, const Color(0xFF00B894))),
     ]);
   }
 
-  Widget _buildMiniStat(String label, String value, IconData icon, Color color) {
+  Widget _buildMiniStat(
+      String label, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -336,21 +506,29 @@ class _TeamTabState extends State<TeamTab> {
       ),
       child: Row(children: [
         Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, color: color, size: 18),
         ),
         const SizedBox(width: 12),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: color)),
-          Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w700, color: color)),
+          Text(label,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
         ]),
       ]),
     );
   }
 
   Widget _buildMemberRow(TeamMember member, BuildContext context) {
-    final progress = member.tasksAssigned > 0 ? member.tasksCompleted / member.tasksAssigned : 0.0;
+    final progress = member.tasksAssigned > 0
+        ? member.tasksCompleted / member.tasksAssigned
+        : 0.0;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -361,14 +539,32 @@ class _TeamTabState extends State<TeamTab> {
         Expanded(
           flex: 3,
           child: Row(children: [
-            Container(
-              width: 38, height: 38,
-              decoration: BoxDecoration(color: member.avatarColor.withValues(alpha: 0.15), shape: BoxShape.circle),
-              child: Center(child: Text(member.initials,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: member.avatarColor))),
-            ),
+            _buildTeamAvatar(member),
             const SizedBox(width: 12),
-            Text(member.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    member.name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    _workloadStatusLabel(member.workloadStatus),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _workloadStatusColor(member.workloadStatus),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ]),
         ),
         Expanded(
@@ -379,13 +575,18 @@ class _TeamTabState extends State<TeamTab> {
               color: member.avatarColor.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Text(member.role, style: TextStyle(fontSize: 12, color: member.avatarColor, fontWeight: FontWeight.w500),
+            child: Text(member.role,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: member.avatarColor,
+                    fontWeight: FontWeight.w500),
                 textAlign: TextAlign.center),
           ),
         ),
         Expanded(
           child: Text('${member.tasksCompleted}/${member.tasksAssigned}',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              style:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
         ),
         Expanded(
           child: Row(children: [
@@ -395,26 +596,43 @@ class _TeamTabState extends State<TeamTab> {
                 child: LinearProgressIndicator(
                   value: progress,
                   backgroundColor: Colors.grey.shade200,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                      progress >= 1.0 ? const Color(0xFF00B894) : const Color(0xFF6C5CE7)),
+                  valueColor: AlwaysStoppedAnimation<Color>(progress >= 1.0
+                      ? const Color(0xFF00B894)
+                      : const Color(0xFF6C5CE7)),
                   minHeight: 6,
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            Text('${(progress * 100).round()}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            Text('${(progress * 100).round()}%',
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           ]),
         ),
         const SizedBox(width: 8),
         PopupMenuButton<String>(
           icon: Icon(Icons.more_vert, size: 18, color: Colors.grey.shade500),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           itemBuilder: (context) => [
             const PopupMenuItem(value: 'view', child: Text('Lihat Profil')),
-            const PopupMenuItem(value: 'remove', child: Text('Hapus dari Proyek', style: TextStyle(color: Colors.red))),
+            const PopupMenuItem(
+                value: 'remove',
+                child: Text('Hapus dari Proyek',
+                    style: TextStyle(color: Colors.red))),
           ],
           onSelected: (value) {
-            if (value == 'remove') {
+            if (value == 'view') {
+              Navigator.push(
+                context,
+                NoTransitionPageRoute(
+                  builder: (context) => MemberProfilePage(
+                    memberId: member.memberId,
+                    memberName: member.name,
+                  ),
+                ),
+              );
+            } else if (value == 'remove') {
               _removeMember(member.id, member.name);
             }
           },
@@ -422,9 +640,93 @@ class _TeamTabState extends State<TeamTab> {
       ]),
     );
   }
+
+  Widget _buildTeamAvatar(TeamMember member) {
+    Widget fallback() {
+      return Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: member.avatarColor.withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Text(
+            member.initials,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: member.avatarColor,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final avatarUrl = member.avatarSignedUrl;
+    if (avatarUrl == null || avatarUrl.isEmpty) {
+      return fallback();
+    }
+
+    return ClipOval(
+      child: Image.network(
+        avatarUrl,
+        width: 38,
+        height: 38,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback(),
+      ),
+    );
+  }
+
+  Color _workloadStatusColor(String status) {
+    switch (status) {
+      case 'overload':
+        return Colors.red.shade900;
+      case 'critical':
+        return Colors.red.shade600;
+      case 'warning':
+        return Colors.orange.shade700;
+      case 'safe':
+        return Colors.green.shade700;
+      case 'no_capacity':
+        return Colors.grey.shade600;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _workloadStatusLabel(String status) {
+    switch (status) {
+      case 'overload':
+        return 'Overload';
+      case 'critical':
+        return 'Critical';
+      case 'warning':
+        return 'Warning';
+      case 'safe':
+        return 'Aman';
+      case 'no_capacity':
+        return 'No Capacity';
+      default:
+        return status;
+    }
+  }
 }
 
 // ─── Add Member Dialog ──────────────────────────────────────────────────────
+
+class _TeamTaskStats {
+  const _TeamTaskStats({
+    required this.assigned,
+    required this.completed,
+  });
+
+  static const zero = _TeamTaskStats(assigned: 0, completed: 0);
+
+  final int assigned;
+  final int completed;
+}
 
 class _AddMemberDialog extends StatefulWidget {
   final String projectId;
@@ -441,7 +743,7 @@ class _AddMemberDialog extends StatefulWidget {
 
 class _AddMemberDialogState extends State<_AddMemberDialog> {
   List<Map<String, dynamic>> _availableMembers = [];
-  List<String> _selectedMemberIds = [];
+  final List<String> _selectedMemberIds = [];
   bool _isLoading = true;
   String _searchQuery = '';
 
@@ -466,9 +768,8 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
 
       final orgId = userMember['organization_id'];
 
-      final allMembers = await Supabase.instance.client
-          .from('members')
-          .select('''
+      final allMembers =
+          await Supabase.instance.client.from('members').select('''
             id,
             profile:profiles!inner(
               full_name,
@@ -476,8 +777,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
             ),
             role,
             position_code
-          ''')
-          .eq('organization_id', orgId);
+          ''').eq('organization_id', orgId);
 
       final projectMembers = await Supabase.instance.client
           .from('project_members')
@@ -517,21 +817,23 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
 
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
-      
-      final inserts = _selectedMemberIds.map((memberId) => {
-        'project_id': widget.projectId,
-        'member_id': memberId,
-        'added_by': userId,
-      }).toList();
 
-      await Supabase.instance.client
-          .from('project_members')
-          .insert(inserts);
+      final inserts = _selectedMemberIds
+          .map((memberId) => {
+                'project_id': widget.projectId,
+                'member_id': memberId,
+                'added_by': userId,
+              })
+          .toList();
+
+      await Supabase.instance.client.from('project_members').insert(inserts);
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${_selectedMemberIds.length} anggota berhasil ditambahkan')),
+          SnackBar(
+              content: Text(
+                  '${_selectedMemberIds.length} anggota berhasil ditambahkan')),
         );
         widget.onMemberAdded();
       }
@@ -547,7 +849,8 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
   @override
   Widget build(BuildContext context) {
     final filteredMembers = _availableMembers.where((member) {
-      final name = member['profile']['full_name']?.toString().toLowerCase() ?? '';
+      final name =
+          member['profile']['full_name']?.toString().toLowerCase() ?? '';
       final email = member['profile']['email']?.toString().toLowerCase() ?? '';
       final query = _searchQuery.toLowerCase();
       return name.contains(query) || email.contains(query);
@@ -565,7 +868,8 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
               padding: const EdgeInsets.all(24),
               child: Row(
                 children: [
-                  const Icon(Icons.person_add, color: Color(0xFF6C5CE7), size: 28),
+                  const Icon(Icons.person_add,
+                      color: Color(0xFF6C5CE7), size: 28),
                   const SizedBox(width: 12),
                   const Text(
                     'Tambah Anggota Proyek',
@@ -603,13 +907,15 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
+                              Icon(Icons.people_outline,
+                                  size: 64, color: Colors.grey.shade400),
                               const SizedBox(height: 16),
                               Text(
                                 _searchQuery.isEmpty
                                     ? 'Semua anggota sudah ditambahkan'
                                     : 'Tidak ada anggota yang cocok',
-                                style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+                                style: TextStyle(
+                                    fontSize: 16, color: Colors.grey.shade600),
                               ),
                             ],
                           ),
@@ -625,7 +931,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                             final email = profile['email'] ?? '';
                             final role = member['role'] ?? 'member';
                             final positionCode = member['position_code'];
-                            
+
                             // Map role to display
                             String displayRole = 'Member';
                             if (role == 'owner') {
@@ -635,12 +941,14 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                             } else if (positionCode != null) {
                               displayRole = positionCode;
                             }
-                            
-                            final isSelected = _selectedMemberIds.contains(memberId);
+
+                            final isSelected =
+                                _selectedMemberIds.contains(memberId);
 
                             final nameParts = fullName.split(' ');
                             final initials = nameParts.length >= 2
-                                ? '${nameParts[0][0]}${nameParts[1][0]}'.toUpperCase()
+                                ? '${nameParts[0][0]}${nameParts[1][0]}'
+                                    .toUpperCase()
                                 : fullName.substring(0, 2).toUpperCase();
 
                             final colors = [
@@ -651,17 +959,23 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                               const Color(0xFF0984E3),
                               const Color(0xFFFDAA5C),
                             ];
-                            final color = colors[fullName.hashCode.abs() % colors.length];
+                            final color =
+                                colors[fullName.hashCode.abs() % colors.length];
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 12),
                               decoration: BoxDecoration(
                                 border: Border.all(
-                                  color: isSelected ? const Color(0xFF6C5CE7) : Colors.grey.shade200,
+                                  color: isSelected
+                                      ? const Color(0xFF6C5CE7)
+                                      : Colors.grey.shade200,
                                   width: isSelected ? 2 : 1,
                                 ),
                                 borderRadius: BorderRadius.circular(12),
-                                color: isSelected ? const Color(0xFF6C5CE7).withOpacity(0.05) : Colors.white,
+                                color: isSelected
+                                    ? const Color(0xFF6C5CE7)
+                                        .withValues(alpha: 0.05)
+                                    : Colors.white,
                               ),
                               child: CheckboxListTile(
                                 value: isSelected,
@@ -678,7 +992,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                                   width: 48,
                                   height: 48,
                                   decoration: BoxDecoration(
-                                    color: color.withOpacity(0.15),
+                                    color: color.withValues(alpha: 0.15),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Center(
@@ -704,13 +1018,16 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                                   children: [
                                     Text(
                                       email,
-                                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey.shade600),
                                     ),
                                     const SizedBox(height: 4),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: color.withOpacity(0.1),
+                                        color: color.withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
@@ -754,12 +1071,14 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                       ),
                       const SizedBox(width: 12),
                       ElevatedButton(
-                        onPressed: _selectedMemberIds.isEmpty ? null : _addMembers,
+                        onPressed:
+                            _selectedMemberIds.isEmpty ? null : _addMembers,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF6C5CE7),
                           foregroundColor: Colors.white,
                           disabledBackgroundColor: Colors.grey.shade300,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
                         ),
                         child: const Text('Tambah Anggota'),
                       ),

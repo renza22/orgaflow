@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/session/session_service.dart';
+import '../../../../core/supabase_config.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
 import '../../../assignment/domain/models/assignment_member_option.dart';
 import '../../../assignment/presentation/presenters/assign_task_presenter.dart';
@@ -7,6 +9,7 @@ import '../../../dependency/presentation/presenters/manage_dependency_presenter.
 import '../../../task/domain/models/task_skill_requirement_model.dart';
 import '../../../task/presentation/presenters/create_task_presenter.dart';
 import '../../../task/presentation/presenters/task_list_presenter.dart';
+import '../../../workload/domain/models/workload_item_model.dart';
 import '../../models/task_model.dart';
 import '../widgets/kanban_tab.dart';
 import '../widgets/overview_tab.dart';
@@ -17,12 +20,14 @@ class ProjectBoardPage extends StatefulWidget {
   final String projectId;
   final String projectName;
   final String projectDescription;
+  final DateTime? projectDueDate;
 
   const ProjectBoardPage({
     super.key,
     required this.projectId,
     required this.projectName,
     this.projectDescription = '',
+    this.projectDueDate,
   });
 
   @override
@@ -37,12 +42,15 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
   late TabController _tabController;
 
   List<Task> _tasks = [];
+  List<WorkloadItemModel> _projectWorkloads = const [];
   List<AssignmentMemberOption> _assignableMembers = [];
   bool _isLoadingTasks = true;
+  bool _isLoadingProjectWorkloads = true;
   bool _canManageTasks = false;
   bool _isLoadingAssignableMembers = false;
   bool _didLoadAssignableMembers = false;
   String? _assignableMembersError;
+  String? _projectWorkloadError;
 
   final List<KanbanColumn> _columns = [
     KanbanColumn(
@@ -119,6 +127,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
       setState(() {
         _canManageTasks = canManageTasks;
         _isLoadingTasks = false;
+        _isLoadingProjectWorkloads = false;
       });
       _showMessage(result.error!.message);
       return false;
@@ -149,11 +158,119 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
       _isLoadingTasks = false;
     });
 
+    await _fetchProjectWorkloads(showLoading: false);
+
     if (canManageTasks) {
       await _loadAssignableMembersIfNeeded();
     }
 
     return true;
+  }
+
+  Future<void> _fetchProjectWorkloads({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _isLoadingProjectWorkloads = true;
+        _projectWorkloadError = null;
+      });
+    }
+
+    try {
+      final memberIds = <String>{};
+
+      final projectMemberRows = await supabase
+          .from('project_members')
+          .select('member_id')
+          .eq('project_id', widget.projectId);
+
+      for (final rawProjectMember in projectMemberRows as List<dynamic>) {
+        final memberId = (rawProjectMember as Map)['member_id']?.toString();
+        if (memberId != null && memberId.isNotEmpty) {
+          memberIds.add(memberId);
+        }
+      }
+
+      final taskRows = await supabase
+          .from('tasks')
+          .select('id')
+          .eq('project_id', widget.projectId);
+      final taskIds = (taskRows as List<dynamic>)
+          .map((rawTask) => (rawTask as Map)['id']?.toString())
+          .whereType<String>()
+          .where((taskId) => taskId.isNotEmpty)
+          .toList();
+
+      if (taskIds.isNotEmpty) {
+        final assignmentRows = await supabase
+            .from('task_assignments')
+            .select('member_id')
+            .inFilter('task_id', taskIds);
+
+        for (final rawAssignment in assignmentRows as List<dynamic>) {
+          final memberId = (rawAssignment as Map)['member_id']?.toString();
+          if (memberId != null && memberId.isNotEmpty) {
+            memberIds.add(memberId);
+          }
+        }
+      }
+
+      if (memberIds.isEmpty) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _projectWorkloads = const [];
+          _isLoadingProjectWorkloads = false;
+          _projectWorkloadError = null;
+        });
+        return;
+      }
+
+      final context = await sessionService.getCurrentContext();
+      final organizationId = context?.activeMember?.organizationId;
+      final memberIdList = memberIds.toList();
+
+      final workloadRows = organizationId == null
+          ? await supabase
+              .from('v_member_workload')
+              .select()
+              .inFilter('member_id', memberIdList)
+              .order('load_ratio', ascending: false)
+          : await supabase
+              .from('v_member_workload')
+              .select()
+              .eq('organization_id', organizationId)
+              .inFilter('member_id', memberIdList)
+              .order('load_ratio', ascending: false);
+
+      final workloads = (workloadRows as List<dynamic>)
+          .map(
+            (row) => WorkloadItemModel.fromJson(
+              Map<String, dynamic>.from(row as Map),
+            ),
+          )
+          .toList();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _projectWorkloads = workloads;
+        _isLoadingProjectWorkloads = false;
+        _projectWorkloadError = null;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _projectWorkloads = const [];
+        _isLoadingProjectWorkloads = false;
+        _projectWorkloadError = 'Gagal memuat workload anggota: $error';
+      });
+    }
   }
 
   Future<void> _loadAssignableMembersIfNeeded() async {
@@ -449,9 +566,32 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
     return _canManageTasks || task.canCurrentUserUpdateProgress;
   }
 
-  int get _daysRemaining {
-    // Demo: 18 days remaining
-    return 18;
+  String get _normalizedProjectDescription {
+    final description = widget.projectDescription.trim();
+    if (description.isEmpty || description == '-') {
+      return 'Tidak ada deskripsi.';
+    }
+    return description;
+  }
+
+  String get _deadlineLabel {
+    final dueDate = widget.projectDueDate;
+    if (dueDate == null) {
+      return 'Tanpa deadline';
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(dueDate.year, dueDate.month, dueDate.day);
+    final days = target.difference(today).inDays;
+
+    if (days == 0) {
+      return 'Hari ini';
+    }
+    if (days > 0) {
+      return '$days hari lagi';
+    }
+    return 'Terlambat ${days.abs()} hari';
   }
 
   @override
@@ -506,9 +646,12 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
       case 0:
         return OverviewTab(
           tasks: _tasks,
-          dueDate: DateTime.now().add(Duration(days: _daysRemaining)),
-          projectDescription:
-              'Acara pelantikan pengurus baru organisasi mahasiswa periode 2024/2025',
+          dueDate: widget.projectDueDate,
+          projectDescription: _normalizedProjectDescription,
+          workloads: _projectWorkloads,
+          isLoadingWorkloads: _isLoadingProjectWorkloads,
+          workloadError: _projectWorkloadError,
+          onRetryWorkloads: () => _fetchProjectWorkloads(),
         );
       case 1:
         return KanbanTab(
@@ -581,15 +724,13 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
                     color: Color(0xFF1F2937),
                   ),
                 ),
-                if (widget.projectDescription.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.projectDescription,
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                const SizedBox(height: 4),
+                Text(
+                  _normalizedProjectDescription,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
@@ -616,7 +757,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
                 const Icon(Icons.access_time, size: 16, color: Colors.white),
                 const SizedBox(width: 6),
                 Text(
-                  '${_daysRemaining}d',
+                  _deadlineLabel,
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,

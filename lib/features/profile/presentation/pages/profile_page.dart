@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/session/session_service.dart';
-import '../../../../core/supabase_config.dart';
+import '../../../members/presentation/pages/member_profile_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -11,135 +11,106 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final fullNameController = TextEditingController();
-  final capacityController = TextEditingController();
-
-  bool isLoading = false;
+  String? _memberId;
+  String? _memberName;
+  String? _errorMessage;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    loadCurrentData();
+    _loadCurrentUserProfile();
   }
 
-  Future<void> loadCurrentData() async {
-    final sessionContext =
-        await sessionService.getCurrentContext(refresh: true);
-
-    if (!mounted || sessionContext == null) {
-      return;
-    }
-
-    setState(() {
-      fullNameController.text = sessionContext.profile?.fullName ?? '';
-      capacityController.text =
-          (sessionContext.activeMember?.weeklyCapacityHours ?? 0).toString();
-    });
-  }
-
-  Future<void> saveProfile() async {
-    final sessionContext =
-        await sessionService.getCurrentContext(refresh: true);
-    final user = supabase.auth.currentUser;
-
-    if (user == null || sessionContext == null) {
-      showMessage('User belum login');
-      return;
-    }
-
-    final fullName = fullNameController.text.trim();
-    final capacityText = capacityController.text.trim();
-
-    if (fullName.isEmpty || capacityText.isEmpty) {
-      showMessage('Nama lengkap dan kapasitas wajib diisi');
-      return;
-    }
-
-    final capacity = int.tryParse(capacityText);
-
-    if (capacity == null || capacity < 0) {
-      showMessage('Kapasitas harus berupa angka yang valid');
-      return;
-    }
-
+  Future<void> _loadCurrentUserProfile() async {
     try {
-      setState(() {
-        isLoading = true;
-      });
+      final sessionContext =
+          await sessionService.getCurrentContext(refresh: true);
 
-      await supabase.from('profiles').update({
-        'full_name': fullName,
-      }).eq('id', user.id);
-
-      if (sessionContext.activeMember != null) {
-        await supabase.from('members').update({
-          'weekly_capacity_hours': capacity,
-        }).eq('id', sessionContext.activeMember!.id);
+      if (!mounted) {
+        return;
       }
 
-      await sessionService.clearCache();
-      showMessage('Profile berhasil disimpan');
-    } catch (e) {
-      showMessage('Gagal menyimpan profile: $e');
-    } finally {
+      if (sessionContext == null) {
+        Navigator.pushReplacementNamed(context, '/auth');
+        return;
+      }
+
+      final activeMember = sessionContext.activeMember;
+      if (activeMember == null) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'User belum memiliki organisasi aktif.';
+        });
+        return;
+      }
+
       setState(() {
-        isLoading = false;
+        _memberId = activeMember.id;
+        _memberName =
+            sessionContext.profile?.fullName ?? sessionContext.profile?.email;
+        _errorMessage = null;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Gagal memuat profile user.';
       });
     }
-  }
-
-  void showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
-  @override
-  void dispose() {
-    fullNameController.dispose();
-    capacityController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lengkapi Profil'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: fullNameController,
-              decoration: const InputDecoration(
-                labelText: 'Nama Lengkap',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: capacityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Kapasitas Jam per Minggu',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: isLoading ? null : saveProfile,
-                child: Text(
-                  isLoading ? 'Menyimpan...' : 'Simpan Profil',
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final memberId = _memberId;
+    if (_errorMessage != null || memberId == null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+                const SizedBox(height: 16),
+                Text(
+                  _errorMessage ?? 'Profile user tidak ditemukan.',
+                  textAlign: TextAlign.center,
                 ),
-              ),
+                const SizedBox(height: 16),
+                OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _isLoading = true;
+                      _errorMessage = null;
+                    });
+                    _loadCurrentUserProfile();
+                  },
+                  child: const Text('Coba Lagi'),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+      );
+    }
+
+    return MemberProfilePage(
+      memberId: memberId,
+      memberName: _memberName,
+      showEditButton: true,
+      isCurrentUser: true,
+      sidebarRoute: '/profile',
     );
   }
 }
