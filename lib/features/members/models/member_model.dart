@@ -14,6 +14,8 @@ class Member {
     this.positionLabel,
     this.divisionCode,
     this.divisionLabel,
+    this.avatarPath,
+    this.avatarSignedUrl,
     required this.capacityMax,
     required this.capacityUsed,
     required this.skills,
@@ -35,6 +37,8 @@ class Member {
   final String? positionLabel;
   final String? divisionCode;
   final String? divisionLabel;
+  final String? avatarPath;
+  final String? avatarSignedUrl;
   final int capacityMax;
   final int capacityUsed;
   final List<String> skills;

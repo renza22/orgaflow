@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/navigation/no_transition_page_route.dart';
+import '../../../../core/utils/storage_avatar_url_resolver.dart';
+import '../../../members/presentation/pages/member_profile_page.dart';
+
 class TeamMember {
   final String id;
   final String memberId;
   final String name;
   final String role;
   final String initials;
+  final String? avatarSignedUrl;
   final Color avatarColor;
   final int tasksAssigned;
   final int tasksCompleted;
@@ -18,6 +23,7 @@ class TeamMember {
     required this.name,
     required this.role,
     required this.initials,
+    this.avatarSignedUrl,
     required this.avatarColor,
     required this.tasksAssigned,
     required this.tasksCompleted,
@@ -35,6 +41,9 @@ class TeamTab extends StatefulWidget {
 }
 
 class _TeamTabState extends State<TeamTab> {
+  final StorageAvatarUrlResolver _avatarUrlResolver =
+      StorageAvatarUrlResolver();
+
   List<TeamMember> _members = [];
   bool _isLoading = true;
 
@@ -56,7 +65,8 @@ class _TeamTabState extends State<TeamTab> {
               organization_id,
               profile:profiles!inner(
                 full_name,
-                email
+                email,
+                avatar_path
               ),
               role,
               position_code
@@ -83,12 +93,20 @@ class _TeamTabState extends State<TeamTab> {
         memberIds: memberIds,
         organizationId: organizationId,
       );
+      final avatarSignedUrlByPath = await _avatarUrlResolver.resolveMany(
+        projectMemberRows.map((item) {
+          final member = ((item as Map)['member'] as Map?);
+          final profile = member?['profile'] as Map?;
+          return profile?['avatar_path']?.toString();
+        }),
+      );
 
       final members = projectMemberRows.map((item) {
         final member = item['member'];
         final profile = member['profile'];
         final memberId = member['id']?.toString() ?? '';
         final fullName = profile['full_name'] ?? 'Unknown';
+        final avatarPath = profile['avatar_path']?.toString();
         final role = member['role'] ?? 'member';
         final positionCode = member['position_code'];
         final taskStats = taskStatsByMemberId[memberId] ?? _TeamTaskStats.zero;
@@ -125,6 +143,9 @@ class _TeamTabState extends State<TeamTab> {
           name: fullName,
           role: displayRole,
           initials: initials,
+          avatarSignedUrl: avatarPath == null
+              ? null
+              : avatarSignedUrlByPath[avatarPath.trim()],
           avatarColor: colors[colorIndex.abs()],
           tasksAssigned: taskStats.assigned,
           tasksCompleted: taskStats.completed,
@@ -518,19 +539,7 @@ class _TeamTabState extends State<TeamTab> {
         Expanded(
           flex: 3,
           child: Row(children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                  color: member.avatarColor.withValues(alpha: 0.15),
-                  shape: BoxShape.circle),
-              child: Center(
-                  child: Text(member.initials,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: member.avatarColor))),
-            ),
+            _buildTeamAvatar(member),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -613,12 +622,60 @@ class _TeamTabState extends State<TeamTab> {
                     style: TextStyle(color: Colors.red))),
           ],
           onSelected: (value) {
-            if (value == 'remove') {
+            if (value == 'view') {
+              Navigator.push(
+                context,
+                NoTransitionPageRoute(
+                  builder: (context) => MemberProfilePage(
+                    memberId: member.memberId,
+                    memberName: member.name,
+                  ),
+                ),
+              );
+            } else if (value == 'remove') {
               _removeMember(member.id, member.name);
             }
           },
         ),
       ]),
+    );
+  }
+
+  Widget _buildTeamAvatar(TeamMember member) {
+    Widget fallback() {
+      return Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: member.avatarColor.withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Text(
+            member.initials,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: member.avatarColor,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final avatarUrl = member.avatarSignedUrl;
+    if (avatarUrl == null || avatarUrl.isEmpty) {
+      return fallback();
+    }
+
+    return ClipOval(
+      child: Image.network(
+        avatarUrl,
+        width: 38,
+        height: 38,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback(),
+      ),
     );
   }
 

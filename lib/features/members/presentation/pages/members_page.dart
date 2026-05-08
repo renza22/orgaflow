@@ -448,7 +448,7 @@ class _MembersPageState extends State<MembersPage> {
           context,
           NoTransitionPageRoute(
             builder: (context) => MemberProfilePage(
-              memberId: member.id,
+              memberId: member.memberId,
               memberName: member.name,
             ),
           ),
@@ -476,24 +476,7 @@ class _MembersPageState extends State<MembersPage> {
               children: [
                 Stack(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF6C5CE7),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          member.initials,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
+                    _buildMemberAvatar(member),
                     Positioned(
                       bottom: 0,
                       right: 0,
@@ -598,6 +581,44 @@ class _MembersPageState extends State<MembersPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMemberAvatar(Member member) {
+    Widget fallback() {
+      return Container(
+        width: 40,
+        height: 40,
+        decoration: const BoxDecoration(
+          color: Color(0xFF6C5CE7),
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Text(
+            member.initials,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final avatarUrl = member.avatarSignedUrl;
+    if (avatarUrl == null || avatarUrl.isEmpty) {
+      return fallback();
+    }
+
+    return ClipOval(
+      child: Image.network(
+        avatarUrl,
+        width: 40,
+        height: 40,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback(),
       ),
     );
   }

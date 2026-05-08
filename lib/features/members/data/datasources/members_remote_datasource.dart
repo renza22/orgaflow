@@ -2,15 +2,19 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/supabase_config.dart';
+import '../../../../core/utils/storage_avatar_url_resolver.dart';
 import '../../../workload/domain/models/workload_item_model.dart';
 import '../../models/member_model.dart';
 
 class MembersRemoteDatasource {
   MembersRemoteDatasource({
     SupabaseClient? client,
-  }) : _client = client ?? supabase;
+    StorageAvatarUrlResolver? avatarUrlResolver,
+  })  : _client = client ?? supabase,
+        _avatarUrlResolver = avatarUrlResolver ?? StorageAvatarUrlResolver();
 
   final SupabaseClient _client;
+  final StorageAvatarUrlResolver _avatarUrlResolver;
 
   Future<List<Member>> fetchMembers(String organizationId) async {
     final responses = await Future.wait<dynamic>([
@@ -18,7 +22,8 @@ class MembersRemoteDatasource {
           .from('members')
           .select(
             'id, profile_id, organization_id, role, position_code, '
-            'division_code, weekly_capacity_hours, profiles(full_name, email)',
+            'division_code, weekly_capacity_hours, '
+            'profiles(full_name, email, avatar_path)',
           )
           .eq('organization_id', organizationId)
           .eq('status', 'active')
@@ -62,11 +67,18 @@ class MembersRemoteDatasource {
         .where((id) => id.isNotEmpty)
         .toList();
     final skillsByMemberId = await _fetchSkillsByMemberId(memberIds);
+    final avatarSignedUrlByPath = await _avatarUrlResolver.resolveMany(
+      memberRows.map((row) {
+        final profile = _asMap((row as Map)['profiles'] ?? row['profile']);
+        return profile?['avatar_path']?.toString();
+      }),
+    );
 
     return memberRows.map((rawMember) {
       final member = Map<String, dynamic>.from(rawMember as Map);
       final memberId = member['id']?.toString() ?? '';
       final profile = _asMap(member['profiles'] ?? member['profile']);
+      final avatarPath = profile?['avatar_path']?.toString();
       final positionCode = member['position_code']?.toString();
       final divisionCode = member['division_code']?.toString();
       final workload = workloadByMemberId[memberId];
@@ -91,6 +103,10 @@ class MembersRemoteDatasource {
         divisionCode: divisionCode,
         divisionLabel:
             divisionCode == null ? null : divisionLabelByCode[divisionCode],
+        avatarPath: avatarPath,
+        avatarSignedUrl: avatarPath == null
+            ? null
+            : avatarSignedUrlByPath[avatarPath.trim()],
         capacityMax: weeklyCapacityHours,
         capacityUsed: assignedHours,
         skills: skillsByMemberId[memberId] ?? const [],
