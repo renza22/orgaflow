@@ -302,26 +302,26 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
       _warningThresholdController,
       'Warning Threshold',
     );
-    final criticalThreshold = _parseNumberField(
-      _criticalThresholdController,
-      'Critical Threshold',
-    );
     final overloadThreshold = _parseNumberField(
       _overloadThresholdController,
       'Overload Threshold',
     );
 
-    if (warningThreshold == null ||
-        criticalThreshold == null ||
-        overloadThreshold == null) {
+    if (warningThreshold == null || overloadThreshold == null) {
       return null;
     }
 
-    if (warningThreshold < 0 ||
-        criticalThreshold <= warningThreshold ||
-        overloadThreshold <= criticalThreshold) {
+    if (warningThreshold < 0 || warningThreshold >= 100) {
       _showSnackBar(
-        'Threshold workload tidak valid. Pastikan warning < critical < overload.',
+        'Warning threshold harus antara 0-99%.',
+        backgroundColor: Colors.red,
+      );
+      return null;
+    }
+
+    if (overloadThreshold <= warningThreshold || overloadThreshold > 150) {
+      _showSnackBar(
+        'Overload threshold harus lebih besar dari warning dan maksimal 150%.',
         backgroundColor: Colors.red,
       );
       return null;
@@ -359,7 +359,7 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
       periodStartDate: startDate,
       periodEndDate: endDate,
       warningThreshold: warningThreshold / 100,
-      criticalThreshold: criticalThreshold / 100,
+      criticalThreshold: warningThreshold / 100, // Same as warning for backward compatibility
       overloadThreshold: overloadThreshold / 100,
       burnoutAlertDays: burnoutDays,
       skillWeight: skillWeight / 100,
@@ -374,8 +374,7 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
     }
 
     setState(() {
-      _warningThresholdController.text = '70';
-      _criticalThresholdController.text = '90';
+      _warningThresholdController.text = '75';
       _overloadThresholdController.text = '100';
       _burnoutDaysController.text =
           OrganizationSettingsModel.defaultBurnoutAlertDays.toString();
@@ -666,39 +665,135 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
   }
 
   Widget _buildWorkloadThresholdsCard() {
+    final warningValue = double.tryParse(_warningThresholdController.text) ?? 75;
+    final overloadValue = double.tryParse(_overloadThresholdController.text) ?? 100;
+
     return _buildCard(
       title: 'Workload Thresholds',
       child: Column(
         children: [
-          _buildTextField(
+          // Warning Threshold with Slider
+          _buildThresholdSlider(
             'Warning Threshold (%)',
+            warningValue,
             _warningThresholdController,
-            keyboardType: TextInputType.number,
-            helperText: 'Warning: anggota mulai sibuk.',
+            (value) {
+              setState(() {
+                _warningThresholdController.text = value.round().toString();
+              });
+            },
+            helperText: 'Anggota dengan Load Ratio 75%-99% akan ditandai kuning (Warning)',
           ),
-          const SizedBox(height: 16),
-          _buildTextField(
-            'Critical Threshold (%)',
-            _criticalThresholdController,
-            keyboardType: TextInputType.number,
-            helperText: 'Critical: anggota mendekati burnout.',
-          ),
-          const SizedBox(height: 16),
-          _buildTextField(
+          const SizedBox(height: 24),
+          
+          // Overload Threshold with Slider
+          _buildThresholdSlider(
             'Overload Threshold (%)',
+            overloadValue,
             _overloadThresholdController,
-            keyboardType: TextInputType.number,
-            helperText: 'Overload: kapasitas terlewati.',
+            (value) {
+              setState(() {
+                _overloadThresholdController.text = value.round().toString();
+              });
+            },
+            helperText: 'Anggota dengan Load Ratio ≥100% akan ditandai merah (Overload)',
           ),
           const SizedBox(height: 16),
+          
           _buildTextField(
             'Burnout Alert Days',
             _burnoutDaysController,
             keyboardType: TextInputType.number,
-            helperText: 'Burnout days: jumlah hari overload sebelum alert.',
+            helperText: 'Jumlah hari overload sebelum mengirim alert burnout',
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildThresholdSlider(
+    String label,
+    double value,
+    TextEditingController controller,
+    ValueChanged<double> onChanged,
+    {String? helperText}
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Small input field
+            SizedBox(
+              width: 80,
+              child: TextField(
+                controller: controller,
+                enabled: _isFormEnabled,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                  suffixText: '%',
+                  suffixStyle: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                onChanged: (text) {
+                  final parsed = double.tryParse(text);
+                  if (parsed != null && parsed >= 0 && parsed <= 100) {
+                    onChanged(parsed);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SliderTheme(
+          data: SliderThemeData(
+            activeTrackColor: const Color(0xFF6C5CE7),
+            inactiveTrackColor: Colors.grey.shade300,
+            thumbColor: const Color(0xFF6C5CE7),
+            overlayColor: const Color(0xFF6C5CE7).withOpacity(0.2),
+            trackHeight: 4,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+          ),
+          child: Slider(
+            value: value.clamp(0.0, 100.0),
+            min: 0,
+            max: 100,
+            divisions: 100,
+            onChanged: _isFormEnabled ? onChanged : null,
+          ),
+        ),
+        if (helperText != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            helperText,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ],
     );
   }
 

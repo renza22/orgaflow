@@ -39,6 +39,7 @@ dependencies:
   image_picker: ^1.0.7
   fl_chart: ^0.69.0
   graphview: ^1.5.1
+  intl: ^0.19.0
 
 dev_dependencies:
   flutter_test:
