@@ -13,6 +13,7 @@ import '../../../project/presentation/presenters/projects_presenter.dart';
 import '../../models/project_model.dart';
 import '../../../organization/data/repositories/organization_repository.dart';
 import '../../../projects/presentation/pages/project_board_page.dart';
+import '../../../notifications/widgets/overload_notification_banner.dart';
 import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
 
@@ -432,8 +433,11 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                   children: [
                     // Header Section
                     _buildHeader(isSmallScreen),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
 
+                    // Overload Notification Banner
+                    _buildOverloadNotification(),
+                    
                     // Summary Cards
                     _buildSummaryCards(isSmallScreen),
                     const SizedBox(height: 40),
@@ -607,6 +611,41 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       'Des'
     ];
     return '${days[now.weekday % 7]}, ${now.day} ${months[now.month - 1]} ${now.year}';
+  }
+
+  Widget _buildOverloadNotification() {
+    // Get current user's load percentage from session context
+    final activeMember = _sessionContext?.activeMember;
+    if (activeMember == null) {
+      return const SizedBox.shrink();
+    }
+
+    // Calculate load percentage
+    final capacityMax = activeMember.weeklyCapacityHours;
+    final capacityUsed = activeMember.capacityUsedHours;
+    
+    if (capacityMax <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final loadPercentage = (capacityUsed / capacityMax) * 100;
+    
+    // Only show if overload (>= 100%)
+    if (loadPercentage < 100) {
+      return const SizedBox.shrink();
+    }
+
+    return OverloadNotificationBanner(
+      loadPercentage: loadPercentage,
+      onContactCoordinator: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Fitur hubungi koordinator akan segera hadir'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showAddProjectDialog() async {

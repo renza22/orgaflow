@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../session/session_service.dart';
 import '../supabase_config.dart';
 import '../utils/storage_avatar_url_resolver.dart';
+import '../../features/notifications/widgets/overload_badge.dart';
 
 class ResponsiveSidebar extends StatefulWidget {
   final String currentRoute;
@@ -29,6 +30,8 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
   String _userEmail = '-';
   String _userSubtitle = '-';
   String? _avatarSignedUrl;
+  double _loadPercentage = 0;
+  bool _isOverload = false;
 
   @override
   void initState() {
@@ -59,6 +62,12 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
         profile?.avatarPath,
       );
 
+      // Calculate load percentage
+      final capacityMax = activeMember?.weeklyCapacityHours ?? 0;
+      final capacityUsed = activeMember?.capacityUsedHours ?? 0;
+      final loadPercentage = capacityMax > 0 ? (capacityUsed / capacityMax * 100).toDouble() : 0.0;
+      final isOverload = loadPercentage >= 100;
+
       if (!mounted) {
         return;
       }
@@ -73,6 +82,8 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
             _formatRole(activeMember?.role) ??
             _firstNonEmpty([activeMember?.positionCode]);
         _avatarSignedUrl = avatarSignedUrl;
+        _loadPercentage = loadPercentage;
+        _isOverload = isOverload;
         _isLoadingUser = false;
       });
     } catch (_) {
@@ -262,7 +273,20 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
                 ),
                 itemBuilder: _buildUserMenuItems,
                 onSelected: (value) => _handleUserMenuSelection(context, value),
-                child: _buildUserAvatar(40),
+                child: Stack(
+                  children: [
+                    _buildUserAvatar(40),
+                    if (_isOverload)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: OverloadBadge(
+                          loadPercentage: _loadPercentage,
+                          size: 16,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             )
           : PopupMenuButton<String>(
@@ -274,7 +298,20 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
               onSelected: (value) => _handleUserMenuSelection(context, value),
               child: Row(
                 children: [
-                  _buildUserAvatar(40),
+                  Stack(
+                    children: [
+                      _buildUserAvatar(40),
+                      if (_isOverload)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: OverloadBadge(
+                            loadPercentage: _loadPercentage,
+                            size: 16,
+                          ),
+                        ),
+                    ],
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
