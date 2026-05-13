@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../assignment/domain/models/assignment_member_option.dart';
 import '../../models/task_model.dart';
+import '../../widgets/smart_assign_modal.dart';
+import '../../widgets/task_detail_dialog.dart';
 
 class KanbanTab extends StatefulWidget {
   final List<Task> tasks;
@@ -271,38 +273,80 @@ class _KanbanTabState extends State<KanbanTab> {
     final isLocked = task.isLocked;
     final lockedAccentColor = Colors.orange.shade700;
 
-    return Card(
-      color: isLocked ? const Color(0xFFFFFBEB) : Colors.white,
-      surfaceTintColor: Colors.white,
-      margin: const EdgeInsets.only(bottom: 10),
-      elevation: 1,
-      shadowColor: Colors.black.withValues(alpha: 0.12),
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isLocked ? Colors.orange.shade200 : Colors.grey.shade200,
-        ),
-      ),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 110),
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              color: isLocked ? lockedAccentColor : Color(columnColor),
-              width: 3,
-            ),
+    return InkWell(
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (dialogContext) => TaskDetailDialog(
+            task: task,
+            onEdit: widget.canManageTasks ? () => widget.onEditTask(task) : null,
+            onDelete: widget.canManageTasks ? () => widget.onDeleteTask(task) : null,
+            onSmartAssign: widget.canManageTasks
+                ? () {
+                    Navigator.pop(dialogContext);
+                    showDialog(
+                      context: context,
+                      builder: (context) => SmartAssignModal(
+                        requiredSkills: task.skills,
+                        taskTitle: task.title,
+                        estimatedHours: task.estimatedHours,
+                        onAssign: (memberName, memberId) async {
+                          if (widget.assignableMembers.isNotEmpty) {
+                            final member = widget.assignableMembers.firstWhere(
+                              (m) => m.id == memberId,
+                              orElse: () => widget.assignableMembers.first,
+                            );
+                            await widget.onAssignTask(task, member);
+                          }
+                        },
+                      ),
+                    );
+                  }
+                : null,
+            onManualAssign: widget.canManageTasks
+                ? () {
+                    Navigator.pop(dialogContext);
+                    // Show manual assign menu
+                    _showManualAssignMenu(context, task);
+                  }
+                : null,
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Card(
+        color: isLocked ? const Color(0xFFFFFBEB) : Colors.white,
+        surfaceTintColor: Colors.white,
+        margin: const EdgeInsets.only(bottom: 10),
+        elevation: 1,
+        shadowColor: Colors.black.withValues(alpha: 0.12),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isLocked ? Colors.orange.shade200 : Colors.grey.shade200,
           ),
         ),
-        child: DefaultTextStyle.merge(
-          style: const TextStyle(color: Color(0xFF1F2937)),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 10, 10),
-            child: _buildTaskCardBody(
-              task: task,
-              title: title,
-              description: description,
-              estimatedHours: estimatedHours,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 110),
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: isLocked ? lockedAccentColor : Color(columnColor),
+                width: 3,
+              ),
+            ),
+          ),
+          child: DefaultTextStyle.merge(
+            style: const TextStyle(color: Color(0xFF1F2937)),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 10, 10),
+              child: _buildTaskCardBody(
+                task: task,
+                title: title,
+                description: description,
+                estimatedHours: estimatedHours,
+              ),
             ),
           ),
         ),
@@ -601,39 +645,102 @@ class _KanbanTabState extends State<KanbanTab> {
       );
     }
 
-    final assignText = Text(
-      '+ Assign',
-      style: const TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w500,
-        color: Color(0xFF6B7280),
-      ),
-    );
-
-    if (!widget.canManageTasks) {
-      return assignText;
-    }
-
-    return PopupMenuButton<AssignmentMemberOption>(
-      tooltip: 'Assign task',
-      padding: EdgeInsets.zero,
-      offset: const Offset(0, 8),
-      elevation: 8,
-      color: Colors.white,
-      surfaceTintColor: Colors.white,
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      itemBuilder: (context) => _buildAssignMenuItems(),
-      onSelected: (member) async {
-        await widget.onAssignTask(task, member);
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: assignText,
-      ),
+    // Always show Smart Assign button for unassigned tasks
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Smart Assign Button - Always visible
+        InkWell(
+          onTap: widget.canManageTasks
+              ? () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => SmartAssignModal(
+                      requiredSkills: task.skills,
+                      taskTitle: task.title,
+                      estimatedHours: task.estimatedHours,
+                      onAssign: (memberName, memberId) async {
+                        if (widget.assignableMembers.isNotEmpty) {
+                          final member = widget.assignableMembers.firstWhere(
+                            (m) => m.id == memberId,
+                            orElse: () => widget.assignableMembers.first,
+                          );
+                          await widget.onAssignTask(task, member);
+                        }
+                      },
+                    ),
+                  );
+                }
+              : null,
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.auto_awesome,
+                  size: 12,
+                  color: widget.canManageTasks
+                      ? const Color(0xFF6C5CE7)
+                      : Colors.grey.shade400,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Smart',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: widget.canManageTasks
+                        ? const Color(0xFF6C5CE7)
+                        : Colors.grey.shade400,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Manual Assign Button
+        if (widget.canManageTasks)
+          PopupMenuButton<AssignmentMemberOption>(
+            tooltip: 'Assign task',
+            padding: EdgeInsets.zero,
+            offset: const Offset(0, 8),
+            elevation: 8,
+            color: Colors.white,
+            surfaceTintColor: Colors.white,
+            constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: Colors.grey.shade200),
+            ),
+            itemBuilder: (context) => _buildAssignMenuItems(),
+            onSelected: (member) async {
+              await widget.onAssignTask(task, member);
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 3),
+              child: Text(
+                '+ Assign',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+            ),
+          )
+        else
+          const Text(
+            '+ Assign',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF9CA3AF),
+            ),
+          ),
+      ],
     );
   }
 
@@ -772,5 +879,109 @@ class _KanbanTabState extends State<KanbanTab> {
     }
 
     return parts.map((part) => part.substring(0, 1).toUpperCase()).join();
+  }
+
+  void _showManualAssignMenu(BuildContext context, Task task) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 500),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.grey.shade200),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Assign Task',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+              // Members List
+              Flexible(
+                child: widget.isLoadingAssignableMembers
+                    ? const Center(child: CircularProgressIndicator())
+                    : widget.assignableMembers.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                'Belum ada anggota aktif',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: widget.assignableMembers.length,
+                            itemBuilder: (context, index) {
+                              final member = widget.assignableMembers[index];
+                              return ListTile(
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF6C5CE7)
+                                        .withValues(alpha: 0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _memberInitials(member.fullName),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF6C5CE7),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                title: Text(
+                                  member.fullName.trim().isNotEmpty
+                                      ? member.fullName.trim()
+                                      : 'Tanpa Nama',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                onTap: () async {
+                                  Navigator.pop(context);
+                                  await widget.onAssignTask(task, member);
+                                },
+                              );
+                            },
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

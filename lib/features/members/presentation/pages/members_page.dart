@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/navigation/no_transition_page_route.dart';
 import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
+import '../../../notifications/widgets/overload_badge.dart';
 import '../../models/member_model.dart';
 import '../presenters/members_presenter.dart';
 import 'member_profile_page.dart';
@@ -237,12 +238,8 @@ class _MembersPageState extends State<MembersPage> {
           'Aman', '$_safeCount', Colors.green.shade700, Colors.green.shade50),
       _StatCardData('Warning', '$_warningCount', Colors.orange.shade700,
           Colors.orange.shade50),
-      _StatCardData('Critical', '$_criticalCount', Colors.red.shade600,
-          Colors.red.shade50),
       _StatCardData('Overload', '$_overloadCount', Colors.red.shade900,
           Colors.red.shade50),
-      _StatCardData('No Capacity', '$_noCapacityCount', Colors.grey.shade700,
-          Colors.grey.shade100),
     ];
 
     if (isSmallScreen) {
@@ -263,7 +260,7 @@ class _MembersPageState extends State<MembersPage> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 1100 ? 6 : 3;
+        final columns = constraints.maxWidth >= 900 ? 4 : 2;
         final cardWidth = (constraints.maxWidth - (columns - 1) * 12) / columns;
 
         return Wrap(
@@ -441,6 +438,7 @@ class _MembersPageState extends State<MembersPage> {
   Widget _buildMemberCard(Member member) {
     final statusConfig = member.statusConfig;
     final percentage = member.displayLoadPercentage;
+    final isOverload = member.status == MemberStatus.overload;
 
     return InkWell(
       onTap: () {
@@ -490,6 +488,15 @@ class _MembersPageState extends State<MembersPage> {
                         ),
                       ),
                     ),
+                    if (isOverload)
+                      Positioned(
+                        top: -2,
+                        right: -2,
+                        child: OverloadBadge(
+                          loadPercentage: percentage,
+                          size: 18,
+                        ),
+                      ),
                   ],
                 ),
                 const SizedBox(width: 10),
