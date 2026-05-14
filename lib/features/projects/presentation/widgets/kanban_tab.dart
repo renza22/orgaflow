@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../assignment/domain/models/assignment_member_option.dart';
+import '../../../assignment/presentation/presenters/assign_task_presenter.dart';
+import '../../../assignment/presentation/widgets/smart_assign_wizard_dialog.dart';
 import '../../models/task_model.dart';
-import '../../widgets/smart_assign_modal.dart';
 import '../../widgets/task_detail_dialog.dart';
 
 class KanbanTab extends StatefulWidget {
@@ -12,12 +13,12 @@ class KanbanTab extends StatefulWidget {
   final List<AssignmentMemberOption> assignableMembers;
   final bool isLoadingAssignableMembers;
   final String? assignableMembersError;
+  final AssignTaskPresenter assignTaskPresenter;
   final Future<void> Function(int taskId, TaskStatus newStatus) onMoveTask;
   final VoidCallback onAddTask;
   final ValueChanged<Task> onEditTask;
   final ValueChanged<Task> onDeleteTask;
-  final Future<void> Function(Task task, AssignmentMemberOption member)
-      onAssignTask;
+  final Future<void> Function(Task task) onTaskAssigned;
 
   const KanbanTab({
     super.key,
@@ -27,11 +28,12 @@ class KanbanTab extends StatefulWidget {
     required this.assignableMembers,
     required this.isLoadingAssignableMembers,
     required this.assignableMembersError,
+    required this.assignTaskPresenter,
     required this.onMoveTask,
     required this.onAddTask,
     required this.onEditTask,
     required this.onDeleteTask,
-    required this.onAssignTask,
+    required this.onTaskAssigned,
   });
 
   @override
@@ -41,6 +43,29 @@ class KanbanTab extends StatefulWidget {
 class _KanbanTabState extends State<KanbanTab> {
   List<Task> _getTasksByStatus(TaskStatus status) {
     return widget.tasks.where((task) => task.status == status).toList();
+  }
+
+  void _showSmartAssignWizard(Task task) {
+    final taskId = task.sourceTaskId?.trim();
+    if (taskId == null || taskId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task tidak valid.')),
+      );
+      return;
+    }
+
+    showDialog<bool>(
+      context: context,
+      builder: (context) => SmartAssignWizardDialog(
+        taskId: taskId,
+        taskTitle: task.title,
+        presenter: widget.assignTaskPresenter,
+        assignableMembers: widget.assignableMembers,
+        isLoadingAssignableMembers: widget.isLoadingAssignableMembers,
+        assignableMembersError: widget.assignableMembersError,
+        onAssigned: () => widget.onTaskAssigned(task),
+      ),
+    );
   }
 
   @override
@@ -279,35 +304,20 @@ class _KanbanTabState extends State<KanbanTab> {
           context: context,
           builder: (dialogContext) => TaskDetailDialog(
             task: task,
-            onEdit: widget.canManageTasks ? () => widget.onEditTask(task) : null,
-            onDelete: widget.canManageTasks ? () => widget.onDeleteTask(task) : null,
+            onEdit:
+                widget.canManageTasks ? () => widget.onEditTask(task) : null,
+            onDelete:
+                widget.canManageTasks ? () => widget.onDeleteTask(task) : null,
             onSmartAssign: widget.canManageTasks
                 ? () {
                     Navigator.pop(dialogContext);
-                    showDialog(
-                      context: context,
-                      builder: (context) => SmartAssignModal(
-                        requiredSkills: task.skills,
-                        taskTitle: task.title,
-                        estimatedHours: task.estimatedHours,
-                        onAssign: (memberName, memberId) async {
-                          if (widget.assignableMembers.isNotEmpty) {
-                            final member = widget.assignableMembers.firstWhere(
-                              (m) => m.id == memberId,
-                              orElse: () => widget.assignableMembers.first,
-                            );
-                            await widget.onAssignTask(task, member);
-                          }
-                        },
-                      ),
-                    );
+                    _showSmartAssignWizard(task);
                   }
                 : null,
             onManualAssign: widget.canManageTasks
                 ? () {
                     Navigator.pop(dialogContext);
-                    // Show manual assign menu
-                    _showManualAssignMenu(context, task);
+                    _showSmartAssignWizard(task);
                   }
                 : null,
           ),
@@ -651,27 +661,8 @@ class _KanbanTabState extends State<KanbanTab> {
       children: [
         // Smart Assign Button - Always visible
         InkWell(
-          onTap: widget.canManageTasks
-              ? () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => SmartAssignModal(
-                      requiredSkills: task.skills,
-                      taskTitle: task.title,
-                      estimatedHours: task.estimatedHours,
-                      onAssign: (memberName, memberId) async {
-                        if (widget.assignableMembers.isNotEmpty) {
-                          final member = widget.assignableMembers.firstWhere(
-                            (m) => m.id == memberId,
-                            orElse: () => widget.assignableMembers.first,
-                          );
-                          await widget.onAssignTask(task, member);
-                        }
-                      },
-                    ),
-                  );
-                }
-              : null,
+          onTap:
+              widget.canManageTasks ? () => _showSmartAssignWizard(task) : null,
           borderRadius: BorderRadius.circular(4),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -701,26 +692,13 @@ class _KanbanTabState extends State<KanbanTab> {
           ),
         ),
         const SizedBox(width: 8),
-        // Manual Assign Button
+        // Assign button opens Smart Assign Wizard with manual fallback.
         if (widget.canManageTasks)
-          PopupMenuButton<AssignmentMemberOption>(
-            tooltip: 'Assign task',
-            padding: EdgeInsets.zero,
-            offset: const Offset(0, 8),
-            elevation: 8,
-            color: Colors.white,
-            surfaceTintColor: Colors.white,
-            constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-              side: BorderSide(color: Colors.grey.shade200),
-            ),
-            itemBuilder: (context) => _buildAssignMenuItems(),
-            onSelected: (member) async {
-              await widget.onAssignTask(task, member);
-            },
+          InkWell(
+            onTap: () => _showSmartAssignWizard(task),
+            borderRadius: BorderRadius.circular(4),
             child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 3),
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 3),
               child: Text(
                 '+ Assign',
                 style: TextStyle(
@@ -741,247 +719,6 @@ class _KanbanTabState extends State<KanbanTab> {
             ),
           ),
       ],
-    );
-  }
-
-  List<PopupMenuEntry<AssignmentMemberOption>> _buildAssignMenuItems() {
-    final items = <PopupMenuEntry<AssignmentMemberOption>>[
-      PopupMenuItem<AssignmentMemberOption>(
-        enabled: false,
-        height: 30,
-        child: Text(
-          'ASSIGN TO',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-            color: Colors.grey.shade500,
-          ),
-        ),
-      ),
-      const PopupMenuDivider(height: 1),
-    ];
-
-    if (widget.isLoadingAssignableMembers) {
-      items.add(
-        const PopupMenuItem<AssignmentMemberOption>(
-          enabled: false,
-          height: 42,
-          child: Text(
-            'Memuat anggota...',
-            style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-          ),
-        ),
-      );
-      return items;
-    }
-
-    final error = widget.assignableMembersError?.trim();
-    if (error != null && error.isNotEmpty) {
-      items.add(
-        PopupMenuItem<AssignmentMemberOption>(
-          enabled: false,
-          height: 42,
-          child: Text(
-            error,
-            style: TextStyle(fontSize: 12, color: Colors.red.shade700),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      );
-      return items;
-    }
-
-    if (widget.assignableMembers.isEmpty) {
-      items.add(
-        const PopupMenuItem<AssignmentMemberOption>(
-          enabled: false,
-          height: 42,
-          child: Text(
-            'Belum ada anggota aktif',
-            style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-          ),
-        ),
-      );
-      return items;
-    }
-
-    items.addAll(
-      widget.assignableMembers.map(
-        (member) => PopupMenuItem<AssignmentMemberOption>(
-          value: member,
-          height: 42,
-          child: _buildAssignMemberRow(member),
-        ),
-      ),
-    );
-
-    return items;
-  }
-
-  Widget _buildAssignMemberRow(AssignmentMemberOption member) {
-    final name = member.fullName.trim().isNotEmpty
-        ? member.fullName.trim()
-        : 'Tanpa Nama';
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 26,
-          height: 26,
-          decoration: BoxDecoration(
-            color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: const Color(0xFF6C5CE7).withValues(alpha: 0.18),
-            ),
-          ),
-          child: Center(
-            child: Text(
-              _memberInitials(name),
-              style: const TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF6C5CE7),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 9),
-        Flexible(
-          child: Text(
-            name,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF374151),
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _memberInitials(String name) {
-    final parts = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .take(2)
-        .toList();
-
-    if (parts.isEmpty) {
-      return '?';
-    }
-
-    return parts.map((part) => part.substring(0, 1).toUpperCase()).join();
-  }
-
-  void _showManualAssignMenu(BuildContext context, Task task) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 500),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Colors.grey.shade200),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Assign Task',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 20),
-                      onPressed: () => Navigator.pop(context),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
-                ),
-              ),
-              // Members List
-              Flexible(
-                child: widget.isLoadingAssignableMembers
-                    ? const Center(child: CircularProgressIndicator())
-                    : widget.assignableMembers.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Text(
-                                'Belum ada anggota aktif',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ),
-                          )
-                        : ListView.builder(
-                            shrinkWrap: true,
-                            itemCount: widget.assignableMembers.length,
-                            itemBuilder: (context, index) {
-                              final member = widget.assignableMembers[index];
-                              return ListTile(
-                                leading: Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF6C5CE7)
-                                        .withValues(alpha: 0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      _memberInitials(member.fullName),
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF6C5CE7),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                title: Text(
-                                  member.fullName.trim().isNotEmpty
-                                      ? member.fullName.trim()
-                                      : 'Tanpa Nama',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                onTap: () async {
-                                  Navigator.pop(context);
-                                  await widget.onAssignTask(task, member);
-                                },
-                              );
-                            },
-                          ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

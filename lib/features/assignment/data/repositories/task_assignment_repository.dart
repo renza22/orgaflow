@@ -3,6 +3,7 @@ import '../../../../core/errors/error_mapper.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/session/session_service.dart';
 import '../../domain/models/assignment_member_option.dart';
+import '../../domain/models/smart_assign_recommendation_model.dart';
 import '../datasources/task_assignment_remote_datasource.dart';
 
 class TaskAssignmentRepository {
@@ -53,12 +54,42 @@ class TaskAssignmentRepository {
       await _remoteDatasource.assignTask(
         taskId: taskId,
         memberId: memberId,
-        assignedBy: userId,
       );
 
       return Result<void>.success(null);
     } catch (error) {
       return Result<void>.failure(ErrorMapper.map(error));
+    }
+  }
+
+  Future<Result<List<SmartAssignRecommendationModel>>>
+      fetchSmartAssignRecommendations({
+    required String taskId,
+    int limit = 3,
+    double hardOverloadThreshold = 1.2,
+  }) async {
+    try {
+      final userId = _sessionService.currentUserId;
+      if (userId == null) {
+        return Result<List<SmartAssignRecommendationModel>>.failure(
+          const AppError('User belum login.'),
+        );
+      }
+
+      final recommendations =
+          await _remoteDatasource.fetchSmartAssignRecommendations(
+        taskId: taskId,
+        limit: limit,
+        hardOverloadThreshold: hardOverloadThreshold,
+      );
+
+      return Result<List<SmartAssignRecommendationModel>>.success(
+        recommendations,
+      );
+    } catch (error) {
+      return Result<List<SmartAssignRecommendationModel>>.failure(
+        ErrorMapper.map(error),
+      );
     }
   }
 }

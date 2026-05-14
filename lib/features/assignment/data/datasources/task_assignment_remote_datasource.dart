@@ -4,6 +4,7 @@ import '../../../../core/errors/app_error.dart';
 import '../../../../core/supabase_config.dart';
 import '../../../onboarding/domain/models/master_option.dart';
 import '../../domain/models/assignment_member_option.dart';
+import '../../domain/models/smart_assign_recommendation_model.dart';
 
 class TaskAssignmentRemoteDatasource {
   TaskAssignmentRemoteDatasource({
@@ -60,26 +61,55 @@ class TaskAssignmentRemoteDatasource {
     }).toList();
   }
 
+  Future<List<SmartAssignRecommendationModel>> fetchSmartAssignRecommendations({
+    required String taskId,
+    int limit = 3,
+    double hardOverloadThreshold = 1.2,
+  }) async {
+    final response = await _client.rpc(
+      'get_smart_assign_recommendations',
+      params: {
+        'p_task_id': taskId,
+        'p_limit': limit,
+        'p_hard_overload_threshold': hardOverloadThreshold,
+      },
+    );
+
+    if (response == null) {
+      return const [];
+    }
+
+    if (response is List) {
+      return response
+          .map(
+            (json) => SmartAssignRecommendationModel.fromJson(
+              Map<String, dynamic>.from(json as Map),
+            ),
+          )
+          .toList(growable: false);
+    }
+
+    if (response is Map) {
+      return [
+        SmartAssignRecommendationModel.fromJson(
+          Map<String, dynamic>.from(response),
+        ),
+      ];
+    }
+
+    throw const AppError('Response rekomendasi Smart Assign tidak valid.');
+  }
+
   Future<void> assignTask({
     required String taskId,
     required String memberId,
-    required String assignedBy,
   }) async {
-    final existing = await _client
-        .from('task_assignments')
-        .select('id')
-        .eq('task_id', taskId)
-        .eq('member_id', memberId)
-        .maybeSingle();
-
-    if (existing != null) {
-      throw const AppError('Member ini sudah ditugaskan pada task tersebut.');
-    }
-
-    await _client.from('task_assignments').insert({
-      'task_id': taskId,
-      'member_id': memberId,
-      'assigned_by': assignedBy,
-    });
+    await _client.rpc(
+      'assign_task_with_notification',
+      params: {
+        'p_task_id': taskId,
+        'p_member_id': memberId,
+      },
+    );
   }
 }

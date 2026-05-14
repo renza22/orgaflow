@@ -507,49 +507,12 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
     await _fetchProjectTasks(showLoading: false);
   }
 
-  Future<void> _assignTask(
-    Task task,
-    AssignmentMemberOption member,
-  ) async {
-    if (!_canManageTasks) {
-      _showMessage('Anda tidak memiliki izin untuk mengelola task.');
-      return;
-    }
-
-    final taskId = task.sourceTaskId?.trim();
-    if (taskId == null || taskId.isEmpty) {
-      _showMessage('Task tidak valid.');
-      return;
-    }
-
+  Future<void> _handleTaskAssigned(Task task) async {
     debugPrint(
-      'ProjectBoardPage assign task selected: taskId=$taskId, '
-      'memberId=${member.id}',
+      'ProjectBoardPage refresh after assignment: '
+      'taskId=${task.sourceTaskId}',
     );
-
-    final result = await _assignTaskPresenter.assignTask(
-      taskId: taskId,
-      memberId: member.id,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (result.isFailure) {
-      _showMessage(result.error!.message);
-      return;
-    }
-
-    final refreshed = await _fetchProjectTasks(showLoading: false);
-
-    if (!mounted) {
-      return;
-    }
-
-    if (refreshed) {
-      _showMessage('Task berhasil ditugaskan');
-    }
+    await _fetchProjectTasks(showLoading: false);
   }
 
   void _showMessage(String message) {
@@ -661,11 +624,12 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
           assignableMembers: _assignableMembers,
           isLoadingAssignableMembers: _isLoadingAssignableMembers,
           assignableMembersError: _assignableMembersError,
+          assignTaskPresenter: _assignTaskPresenter,
           onMoveTask: _moveTask,
           onAddTask: _showAddTaskDialog,
           onEditTask: _showEditTaskDialog,
           onDeleteTask: _confirmDeleteTask,
-          onAssignTask: _assignTask,
+          onTaskAssigned: _handleTaskAssigned,
         );
       case 2:
         return WorkflowTab(
