@@ -3,6 +3,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_error.dart';
 
 class ErrorMapper {
+  static bool isOverloadErrorMessage(String message) {
+    final normalized = message.toLowerCase();
+    return normalized.contains('overload') ||
+        normalized.contains('overload terdeteksi');
+  }
+
   static AppError map(Object error) {
     if (error is AppError) {
       return error;
@@ -20,6 +26,11 @@ class ErrorMapper {
         _mapPostgrestMessage(error),
         cause: error,
       );
+    }
+
+    final message = error.toString();
+    if (isOverloadErrorMessage(message)) {
+      return AppError(message, cause: error);
     }
 
     return AppError(
@@ -67,9 +78,25 @@ class ErrorMapper {
   }
 
   static String _mapPostgrestMessage(PostgrestException error) {
-    final message = error.message.toLowerCase();
-    final details = (error.details ?? '').toString().toLowerCase();
-    final hint = (error.hint ?? '').toString().toLowerCase();
+    final rawMessage = error.message;
+    final rawDetails = (error.details ?? '').toString();
+    final rawHint = (error.hint ?? '').toString();
+
+    if (isOverloadErrorMessage(rawMessage)) {
+      return rawMessage;
+    }
+
+    if (isOverloadErrorMessage(rawDetails)) {
+      return rawDetails;
+    }
+
+    if (isOverloadErrorMessage(rawHint)) {
+      return rawHint;
+    }
+
+    final message = rawMessage.toLowerCase();
+    final details = rawDetails.toLowerCase();
+    final hint = rawHint.toLowerCase();
 
     if (message.contains('cycle') ||
         details.contains('cycle') ||

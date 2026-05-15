@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/errors/error_mapper.dart';
 import '../../../../core/session/session_service.dart';
 import '../../../../core/supabase_config.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
@@ -931,10 +932,17 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
       }
 
       if (result.isFailure) {
+        final message = result.error!.message;
         setState(() {
           _isSubmitting = false;
         });
-        _showMessage(result.error!.message);
+
+        if (ErrorMapper.isOverloadErrorMessage(message)) {
+          await _showOverloadDurationDialog(message);
+          return;
+        }
+
+        _showMessage(message);
         return;
       }
 
@@ -1008,6 +1016,22 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _showOverloadDurationDialog(String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Perubahan Durasi Ditahan'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Mengerti'),
+          ),
+        ],
+      ),
     );
   }
 

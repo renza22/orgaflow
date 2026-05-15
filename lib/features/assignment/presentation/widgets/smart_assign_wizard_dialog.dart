@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/errors/error_mapper.dart';
 import '../../domain/models/assignment_member_option.dart';
 import '../../domain/models/smart_assign_recommendation_model.dart';
 import '../presenters/assign_task_presenter.dart';
@@ -233,11 +234,18 @@ class _SmartAssignWizardDialogState extends State<SmartAssignWizardDialog> {
     }
 
     if (result.isFailure) {
+      final message = result.error!.message;
       setState(() {
         _assigningMemberId = null;
         _isManualAssigning = false;
       });
-      _showMessage(result.error!.message);
+
+      if (ErrorMapper.isOverloadErrorMessage(message)) {
+        await _showOverloadDialog(message);
+        return;
+      }
+
+      _showMessage(message);
       return;
     }
 
@@ -258,6 +266,22 @@ class _SmartAssignWizardDialogState extends State<SmartAssignWizardDialog> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _showOverloadDialog(String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Overload Terdeteksi'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Mengerti'),
+          ),
+        ],
+      ),
     );
   }
 
