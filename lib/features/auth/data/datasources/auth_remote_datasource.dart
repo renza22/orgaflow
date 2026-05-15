@@ -26,6 +26,10 @@ class AuthRemoteDatasource {
     return _client.auth.resetPasswordForEmail(email);
   }
 
+  Future<void> signOut() async {
+    await _client.auth.signOut();
+  }
+
   Future<AuthResponse> signUp(RegisterInput input) {
     return _client.auth.signUp(
       email: input.email,

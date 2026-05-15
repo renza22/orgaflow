@@ -42,6 +42,16 @@ class AuthRepository {
     }
   }
 
+  Future<Result<void>> signOut() async {
+    try {
+      await _remoteDatasource.signOut();
+      await _sessionService.clearCache();
+      return Result<void>.success(null);
+    } catch (error) {
+      return Result<void>.failure(ErrorMapper.map(error));
+    }
+  }
+
   Future<Result<RegisterFlowResult>> signUp(RegisterInput input) async {
     try {
       final response = await _remoteDatasource.signUp(input);

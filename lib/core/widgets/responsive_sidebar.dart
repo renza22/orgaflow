@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../session/session_service.dart';
 import '../supabase_config.dart';
 import '../utils/storage_avatar_url_resolver.dart';
+import '../../features/auth/data/repositories/auth_repository.dart';
 import '../../features/notifications/widgets/overload_badge.dart';
 
 class ResponsiveSidebar extends StatefulWidget {
@@ -23,9 +24,11 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
 
   final StorageAvatarUrlResolver _avatarUrlResolver =
       StorageAvatarUrlResolver();
+  final AuthRepository _authRepository = AuthRepository();
 
   late bool _isCollapsed;
   bool _isLoadingUser = true;
+  bool _isLoggingOut = false;
   String _userName = '-';
   String _userEmail = '-';
   String _userSubtitle = '-';
@@ -65,7 +68,8 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
       // Calculate load percentage
       final capacityMax = activeMember?.weeklyCapacityHours ?? 0;
       final capacityUsed = activeMember?.capacityUsedHours ?? 0;
-      final loadPercentage = capacityMax > 0 ? (capacityUsed / capacityMax * 100).toDouble() : 0.0;
+      final loadPercentage =
+          capacityMax > 0 ? (capacityUsed / capacityMax * 100).toDouble() : 0.0;
       final isOverload = loadPercentage >= 100;
 
       if (!mounted) {
@@ -358,11 +362,12 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
       ),
       PopupMenuItem<String>(
         value: 'logout',
+        enabled: !_isLoggingOut,
         child: Row(
           children: [
             Icon(Icons.logout, size: 20, color: Colors.grey.shade700),
             const SizedBox(width: 12),
-            const Text('Logout'),
+            Text(_isLoggingOut ? 'Keluar...' : 'Logout'),
           ],
         ),
       ),
@@ -457,10 +462,66 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
     if (value == 'profile') {
       Navigator.pushNamed(context, '/profile');
     } else if (value == 'logout') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Logout functionality coming soon')),
-      );
+      _confirmLogout();
     }
+  }
+
+  Future<void> _confirmLogout() async {
+    if (_isLoggingOut) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Apakah Anda yakin ingin keluar dari akun ini?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6C5CE7),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isLoggingOut = true;
+    });
+
+    final result = await _authRepository.signOut();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result.isFailure) {
+      setState(() {
+        _isLoggingOut = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.error!.message)),
+      );
+      return;
+    }
+
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/auth',
+      (route) => false,
+    );
   }
 
   String _firstNonEmpty(List<String?> values) {
