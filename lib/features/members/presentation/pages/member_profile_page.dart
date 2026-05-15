@@ -776,7 +776,7 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Belum ada data fairness',
+                'Belum ada data fairness.',
                 style: TextStyle(
                   fontSize: isSmallScreen ? 12 : 13,
                   color: Colors.grey.shade600,
