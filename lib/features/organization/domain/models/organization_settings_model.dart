@@ -23,7 +23,7 @@ class OrganizationSettingsModel {
   });
 
   static const double defaultWarningThreshold = 0.70;
-  static const double defaultCriticalThreshold = 0.90;
+  static const double defaultCriticalThreshold = 1.00;
   static const double defaultOverloadThreshold = 1.00;
   static const int defaultBurnoutAlertDays = 14;
   static const double defaultSkillWeight = 0.40;

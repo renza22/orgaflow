@@ -29,7 +29,6 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
   final _startDateController = TextEditingController();
   final _endDateController = TextEditingController();
   final _warningThresholdController = TextEditingController();
-  final _criticalThresholdController = TextEditingController();
   final _overloadThresholdController = TextEditingController();
   final _burnoutDaysController = TextEditingController();
 
@@ -67,7 +66,6 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
     _startDateController.dispose();
     _endDateController.dispose();
     _warningThresholdController.dispose();
-    _criticalThresholdController.dispose();
     _overloadThresholdController.dispose();
     _burnoutDaysController.dispose();
     super.dispose();
@@ -197,8 +195,6 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
     _endDateController.text = _formatDate(settings.periodEndDate);
     _warningThresholdController.text =
         _formatNumber(settings.warningThreshold * 100);
-    _criticalThresholdController.text =
-        _formatNumber(settings.criticalThreshold * 100);
     _overloadThresholdController.text =
         _formatNumber(settings.overloadThreshold * 100);
     _burnoutDaysController.text = settings.burnoutAlertDays.toString();
@@ -311,17 +307,25 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
       return null;
     }
 
-    if (warningThreshold < 0 || warningThreshold >= 100) {
+    if (warningThreshold < 0) {
       _showSnackBar(
-        'Warning threshold harus antara 0-99%.',
+        'Warning threshold tidak boleh kurang dari 0%.',
         backgroundColor: Colors.red,
       );
       return null;
     }
 
-    if (overloadThreshold <= warningThreshold || overloadThreshold > 150) {
+    if (warningThreshold >= overloadThreshold) {
       _showSnackBar(
-        'Overload threshold harus lebih besar dari warning dan maksimal 150%.',
+        'Warning threshold harus lebih kecil dari overload threshold.',
+        backgroundColor: Colors.red,
+      );
+      return null;
+    }
+
+    if (overloadThreshold > 150) {
+      _showSnackBar(
+        'Overload threshold maksimal 150%.',
         backgroundColor: Colors.red,
       );
       return null;
@@ -359,7 +363,7 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
       periodStartDate: startDate,
       periodEndDate: endDate,
       warningThreshold: warningThreshold / 100,
-      criticalThreshold: warningThreshold / 100, // Same as warning for backward compatibility
+      criticalThreshold: overloadThreshold / 100,
       overloadThreshold: overloadThreshold / 100,
       burnoutAlertDays: burnoutDays,
       skillWeight: skillWeight / 100,
@@ -374,7 +378,7 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
     }
 
     setState(() {
-      _warningThresholdController.text = '75';
+      _warningThresholdController.text = '70';
       _overloadThresholdController.text = '100';
       _burnoutDaysController.text =
           OrganizationSettingsModel.defaultBurnoutAlertDays.toString();
@@ -449,7 +453,7 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
     String label,
   ) {
     final value = controller.text.trim();
-    final parsed = double.tryParse(value);
+    final parsed = double.tryParse(value.replaceAll(',', '.'));
 
     if (value.isEmpty || parsed == null) {
       _showSnackBar('$label wajib berupa angka.', backgroundColor: Colors.red);
@@ -665,14 +669,17 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
   }
 
   Widget _buildWorkloadThresholdsCard() {
-    final warningValue = double.tryParse(_warningThresholdController.text) ?? 75;
-    final overloadValue = double.tryParse(_overloadThresholdController.text) ?? 100;
+    final warningValue = double.tryParse(
+            _warningThresholdController.text.replaceAll(',', '.')) ??
+        70;
+    final overloadValue = double.tryParse(
+            _overloadThresholdController.text.replaceAll(',', '.')) ??
+        100;
 
     return _buildCard(
       title: 'Workload Thresholds',
       child: Column(
         children: [
-          // Warning Threshold with Slider
           _buildThresholdSlider(
             'Warning Threshold (%)',
             warningValue,
@@ -682,11 +689,10 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
                 _warningThresholdController.text = value.round().toString();
               });
             },
-            helperText: 'Anggota dengan Load Ratio 75%-99% akan ditandai kuning (Warning)',
+            helperText:
+                'Load ${_formatNumber(warningValue)}% sampai <${_formatNumber(overloadValue)}% akan ditandai kuning.',
           ),
           const SizedBox(height: 24),
-          
-          // Overload Threshold with Slider
           _buildThresholdSlider(
             'Overload Threshold (%)',
             overloadValue,
@@ -696,10 +702,10 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
                 _overloadThresholdController.text = value.round().toString();
               });
             },
-            helperText: 'Anggota dengan Load Ratio ≥100% akan ditandai merah (Overload)',
+            helperText:
+                'Load >=${_formatNumber(overloadValue)}% akan ditandai merah.',
           ),
           const SizedBox(height: 16),
-          
           _buildTextField(
             'Burnout Alert Days',
             _burnoutDaysController,
@@ -715,9 +721,9 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
     String label,
     double value,
     TextEditingController controller,
-    ValueChanged<double> onChanged,
-    {String? helperText}
-  ) {
+    ValueChanged<double> onSliderChanged, {
+    String? helperText,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -739,7 +745,9 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
               child: TextField(
                 controller: controller,
                 enabled: _isFormEnabled,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 textAlign: TextAlign.center,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
@@ -755,12 +763,7 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
                     color: Colors.grey.shade600,
                   ),
                 ),
-                onChanged: (text) {
-                  final parsed = double.tryParse(text);
-                  if (parsed != null && parsed >= 0 && parsed <= 100) {
-                    onChanged(parsed);
-                  }
-                },
+                onChanged: (text) => setState(() {}),
               ),
             ),
           ],
@@ -771,16 +774,16 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
             activeTrackColor: const Color(0xFF6C5CE7),
             inactiveTrackColor: Colors.grey.shade300,
             thumbColor: const Color(0xFF6C5CE7),
-            overlayColor: const Color(0xFF6C5CE7).withOpacity(0.2),
+            overlayColor: const Color(0xFF6C5CE7).withValues(alpha: 0.2),
             trackHeight: 4,
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
           ),
           child: Slider(
-            value: value.clamp(0.0, 100.0),
+            value: value.clamp(0.0, 150.0).toDouble(),
             min: 0,
-            max: 100,
-            divisions: 100,
-            onChanged: _isFormEnabled ? onChanged : null,
+            max: 150,
+            divisions: 150,
+            onChanged: _isFormEnabled ? onSliderChanged : null,
           ),
         ),
         if (helperText != null) ...[

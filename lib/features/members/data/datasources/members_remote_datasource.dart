@@ -50,6 +50,7 @@ class MembersRemoteDatasource {
     final workloadRows = responses[1] as List<dynamic>;
     final positionRows = responses[2] as List<dynamic>;
     final divisionRows = responses[3] as List<dynamic>;
+    final thresholds = await _fetchWorkloadThresholds(organizationId);
 
     final workloadByMemberId = <String, WorkloadItemModel>{};
     for (final rawRow in workloadRows) {
@@ -117,9 +118,30 @@ class MembersRemoteDatasource {
             _buildWorkloadStatus(
               weeklyCapacityHours: weeklyCapacityHours,
               loadRatio: loadRatio,
+              warningThreshold: thresholds.warning,
+              overloadThreshold: thresholds.overload,
             ),
       );
     }).toList();
+  }
+
+  Future<({double warning, double overload})> _fetchWorkloadThresholds(
+    String organizationId,
+  ) async {
+    try {
+      final response = await _client
+          .from('organization_workload_settings')
+          .select('warning_threshold, overload_threshold')
+          .eq('organization_id', organizationId)
+          .maybeSingle();
+
+      return (
+        warning: _readDouble(response?['warning_threshold'], fallback: 0.70),
+        overload: _readDouble(response?['overload_threshold'], fallback: 1.00),
+      );
+    } catch (_) {
+      return (warning: 0.70, overload: 1.00);
+    }
   }
 
   Future<Map<String, List<String>>> _fetchSkillsByMemberId(
@@ -205,20 +227,26 @@ class MembersRemoteDatasource {
     return num.tryParse(value?.toString() ?? '')?.toInt() ?? 0;
   }
 
+  double _readDouble(dynamic value, {required double fallback}) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
   String _buildWorkloadStatus({
     required int weeklyCapacityHours,
     required double loadRatio,
+    double warningThreshold = 0.70,
+    double overloadThreshold = 1.00,
   }) {
     if (weeklyCapacityHours <= 0) {
       return 'no_capacity';
     }
-    if (loadRatio > 1) {
+    if (loadRatio >= overloadThreshold) {
       return 'overload';
     }
-    if (loadRatio > 0.9) {
-      return 'critical';
-    }
-    if (loadRatio >= 0.7) {
+    if (loadRatio >= warningThreshold) {
       return 'warning';
     }
     return 'safe';

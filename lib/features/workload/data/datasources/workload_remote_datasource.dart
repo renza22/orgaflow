@@ -46,6 +46,7 @@ class WorkloadRemoteDatasource {
     required Map<String, String> positionMap,
     required Map<String, String> divisionMap,
   }) async {
+    final thresholds = await _fetchWorkloadThresholds(organizationId);
     final memberRows = await _client
         .from('members')
         .select(
@@ -134,12 +135,14 @@ class WorkloadRemoteDatasource {
         activeTaskCount: activeTaskCountByMemberId[member['id'] as String] ?? 0,
         loadRatio: loadRatio,
         loadPercentage: loadRatio * 100,
-        warningThreshold: 0.7,
-        criticalThreshold: 0.9,
-        overloadThreshold: 1.0,
+        warningThreshold: thresholds.warning,
+        criticalThreshold: thresholds.overload,
+        overloadThreshold: thresholds.overload,
         workloadStatus: _buildWorkloadStatus(
           weeklyCapacityHours: weeklyCapacityHours,
           loadRatio: loadRatio,
+          warningThreshold: thresholds.warning,
+          overloadThreshold: thresholds.overload,
         ),
       );
     }).toList()
@@ -194,6 +197,25 @@ class WorkloadRemoteDatasource {
     );
   }
 
+  Future<({double warning, double overload})> _fetchWorkloadThresholds(
+    String organizationId,
+  ) async {
+    try {
+      final response = await _client
+          .from('organization_workload_settings')
+          .select('warning_threshold, overload_threshold')
+          .eq('organization_id', organizationId)
+          .maybeSingle();
+
+      return (
+        warning: _readNullableDouble(response?['warning_threshold']) ?? 0.70,
+        overload: _readNullableDouble(response?['overload_threshold']) ?? 1.00,
+      );
+    } catch (_) {
+      return (warning: 0.70, overload: 1.00);
+    }
+  }
+
   Map<String, dynamic>? _asMap(dynamic value) {
     if (value is Map<String, dynamic>) {
       return value;
@@ -226,23 +248,31 @@ class WorkloadRemoteDatasource {
     return num.tryParse(value.toString())?.toInt();
   }
 
+  double? _readNullableDouble(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value.toString());
+  }
+
   String _buildWorkloadStatus({
     required int weeklyCapacityHours,
     required double loadRatio,
+    double warningThreshold = 0.70,
+    double overloadThreshold = 1.00,
   }) {
     if (weeklyCapacityHours <= 0) {
       return 'no_capacity';
     }
 
-    if (loadRatio > 1) {
+    if (loadRatio >= overloadThreshold) {
       return 'overload';
     }
 
-    if (loadRatio > 0.9) {
-      return 'critical';
-    }
-
-    if (loadRatio >= 0.7) {
+    if (loadRatio >= warningThreshold) {
       return 'warning';
     }
 

@@ -66,6 +66,7 @@ class ProfileRemoteDatasource {
 
     final responses = await Future.wait<dynamic>([
       _fetchWorkload(memberId),
+      _fetchWorkloadThresholds(organizationId),
       _fetchLabel('study_programs', studyProgramCode),
       _fetchLabel('position_templates', positionCode),
       _fetchLabel('division_templates', divisionCode),
@@ -77,14 +78,15 @@ class ProfileRemoteDatasource {
     ]);
 
     final workload = responses[0] as Map<String, dynamic>?;
-    final studyProgramLabel = responses[1] as String?;
-    final positionLabel = responses[2] as String?;
-    final divisionLabel = responses[3] as String?;
-    final skills = responses[4] as List<ProfileSkillModel>;
-    final portfolioLinks = responses[5] as List<ProfilePortfolioLinkModel>;
-    final fairnessRows = responses[6] as List<Map<String, dynamic>>;
-    final taskHistory = responses[7] as List<ProfileTaskHistoryModel>;
-    final avatarSignedUrl = responses[8] as String?;
+    final thresholds = responses[1] as ({double warning, double overload});
+    final studyProgramLabel = responses[2] as String?;
+    final positionLabel = responses[3] as String?;
+    final divisionLabel = responses[4] as String?;
+    final skills = responses[5] as List<ProfileSkillModel>;
+    final portfolioLinks = responses[6] as List<ProfilePortfolioLinkModel>;
+    final fairnessRows = responses[7] as List<Map<String, dynamic>>;
+    final taskHistory = responses[8] as List<ProfileTaskHistoryModel>;
+    final avatarSignedUrl = responses[9] as String?;
 
     final latestFairness = fairnessRows.isEmpty ? null : fairnessRows.first;
     final workloadTrend = fairnessRows.reversed
@@ -134,6 +136,8 @@ class ProfileRemoteDatasource {
           _buildWorkloadStatus(
             weeklyCapacityHours: weeklyCapacityHours,
             loadRatio: loadRatio,
+            warningThreshold: thresholds.warning,
+            overloadThreshold: thresholds.overload,
           ),
       availabilityStatus:
           member['availability_status']?.toString() ?? 'available',
@@ -230,6 +234,25 @@ class ProfileRemoteDatasource {
     }
 
     return Map<String, dynamic>.from(response);
+  }
+
+  Future<({double warning, double overload})> _fetchWorkloadThresholds(
+    String organizationId,
+  ) async {
+    try {
+      final response = await _client
+          .from('organization_workload_settings')
+          .select('warning_threshold, overload_threshold')
+          .eq('organization_id', organizationId)
+          .maybeSingle();
+
+      return (
+        warning: _readDouble(response?['warning_threshold'], fallback: 0.70),
+        overload: _readDouble(response?['overload_threshold'], fallback: 1.00),
+      );
+    } catch (_) {
+      return (warning: 0.70, overload: 1.00);
+    }
   }
 
   Future<String?> _fetchLabel(String table, String? code) async {
@@ -413,17 +436,16 @@ class ProfileRemoteDatasource {
   String _buildWorkloadStatus({
     required int weeklyCapacityHours,
     required double loadRatio,
+    double warningThreshold = 0.70,
+    double overloadThreshold = 1.00,
   }) {
     if (weeklyCapacityHours <= 0) {
       return 'no_capacity';
     }
-    if (loadRatio > 1) {
+    if (loadRatio >= overloadThreshold) {
       return 'overload';
     }
-    if (loadRatio > 0.9) {
-      return 'critical';
-    }
-    if (loadRatio >= 0.7) {
+    if (loadRatio >= warningThreshold) {
       return 'warning';
     }
     return 'safe';
@@ -471,11 +493,11 @@ class ProfileRemoteDatasource {
     return num.tryParse(value?.toString() ?? '')?.toInt() ?? 0;
   }
 
-  double _readDouble(dynamic value) {
+  double _readDouble(dynamic value, {double fallback = 0}) {
     if (value is num) {
       return value.toDouble();
     }
-    return double.tryParse(value?.toString() ?? '') ?? 0;
+    return double.tryParse(value?.toString() ?? '') ?? fallback;
   }
 
   DateTime? _parseDateTime(dynamic value) {
