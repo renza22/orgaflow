@@ -869,7 +869,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
               child: Row(
                 children: [
                   const Icon(Icons.person_add,
-                      color: Color(0xFF6C5CE7), size: 28),
+                      color: Colors.grey, size: 28),
                   const SizedBox(width: 12),
                   const Text(
                     'Tambah Anggota Proyek',

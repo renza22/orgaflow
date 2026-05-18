@@ -47,6 +47,16 @@ class MyApp extends StatelessWidget {
             TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
           },
         ),
+        dialogTheme: const DialogThemeData(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
+        ),
+        iconTheme: const IconThemeData(
+          color: Colors.grey,
+        ),
       ),
       home: const SessionResolverPage(),
       onGenerateRoute: (settings) {
