@@ -13,7 +13,11 @@ class KanbanTab extends StatefulWidget {
   final List<AssignmentMemberOption> assignableMembers;
   final bool isLoadingAssignableMembers;
   final String? assignableMembersError;
+<<<<<<< HEAD
   final AssignTaskPresenter assignTaskPresenter;
+=======
+  final String? currentUserEmail;
+>>>>>>> 74b00b8 (OR-79 Menambahkan Tombol "+")
   final Future<void> Function(int taskId, TaskStatus newStatus) onMoveTask;
   final VoidCallback onAddTask;
   final ValueChanged<Task> onEditTask;
@@ -28,7 +32,11 @@ class KanbanTab extends StatefulWidget {
     required this.assignableMembers,
     required this.isLoadingAssignableMembers,
     required this.assignableMembersError,
+<<<<<<< HEAD
     required this.assignTaskPresenter,
+=======
+    this.currentUserEmail,
+>>>>>>> 74b00b8 (OR-79 Menambahkan Tombol "+")
     required this.onMoveTask,
     required this.onAddTask,
     required this.onEditTask,
@@ -304,10 +312,17 @@ class _KanbanTabState extends State<KanbanTab> {
           context: context,
           builder: (dialogContext) => TaskDetailDialog(
             task: task,
+<<<<<<< HEAD
             onEdit:
                 widget.canManageTasks ? () => widget.onEditTask(task) : null,
             onDelete:
                 widget.canManageTasks ? () => widget.onDeleteTask(task) : null,
+=======
+            currentUserEmail: widget.currentUserEmail,
+            canManageTasks: widget.canManageTasks,
+            onEdit: widget.canManageTasks ? () => widget.onEditTask(task) : null,
+            onDelete: widget.canManageTasks ? () => widget.onDeleteTask(task) : null,
+>>>>>>> 74b00b8 (OR-79 Menambahkan Tombol "+")
             onSmartAssign: widget.canManageTasks
                 ? () {
                     Navigator.pop(dialogContext);
@@ -326,7 +341,7 @@ class _KanbanTabState extends State<KanbanTab> {
       borderRadius: BorderRadius.circular(12),
       child: Card(
         color: isLocked ? const Color(0xFFFFFBEB) : Colors.white,
-        surfaceTintColor: Colors.white,
+        surfaceTintColor: isLocked ? const Color(0xFFFFFBEB) : Colors.white,
         margin: const EdgeInsets.only(bottom: 10),
         elevation: 1,
         shadowColor: Colors.black.withValues(alpha: 0.12),
@@ -340,6 +355,7 @@ class _KanbanTabState extends State<KanbanTab> {
         child: Container(
           constraints: const BoxConstraints(minHeight: 110),
           decoration: BoxDecoration(
+            color: isLocked ? const Color(0xFFFFFBEB) : Colors.white,
             border: Border(
               left: BorderSide(
                 color: isLocked ? lockedAccentColor : Color(columnColor),
@@ -507,44 +523,59 @@ class _KanbanTabState extends State<KanbanTab> {
   }
 
   Widget _buildTaskMetadata(Task task, String estimatedHours) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return Wrap(
+      spacing: 12,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         if (task.isBlocked) ...[
-          Icon(Icons.lock_outline, size: 12, color: Colors.orange.shade700),
-          const SizedBox(width: 4),
-          Text(
-            'Menunggu dependency',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Colors.orange.shade700,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lock_outline, size: 12, color: Colors.orange.shade700),
+              const SizedBox(width: 4),
+              Text(
+                'Menunggu dependency',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.orange.shade700,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
         ],
         if (task.dependencies.isNotEmpty) ...[
-          Icon(Icons.account_tree, size: 12, color: Colors.orange.shade700),
-          const SizedBox(width: 4),
-          Text(
-            '${task.dependencies.length} deps',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Colors.orange.shade700,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.account_tree, size: 12, color: Colors.orange.shade700),
+              const SizedBox(width: 4),
+              Text(
+                '${task.dependencies.length} deps',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.orange.shade700,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
         ],
-        Icon(Icons.access_time, size: 12, color: Colors.grey.shade600),
-        const SizedBox(width: 4),
-        Text(
-          '${estimatedHours}h',
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF374151),
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.access_time, size: 12, color: Colors.grey.shade600),
+            const SizedBox(width: 4),
+            Text(
+              '${estimatedHours}h',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF374151),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -647,17 +678,22 @@ class _KanbanTabState extends State<KanbanTab> {
             ),
           ),
           const SizedBox(width: 6),
-          Text(
-            task.assignee,
-            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+          Flexible(
+            child: Text(
+              task.assignee,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       );
     }
 
     // Always show Smart Assign button for unassigned tasks
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         // Smart Assign Button - Always visible
         InkWell(
@@ -691,8 +727,12 @@ class _KanbanTabState extends State<KanbanTab> {
             ),
           ),
         ),
+<<<<<<< HEAD
         const SizedBox(width: 8),
         // Assign button opens Smart Assign Wizard with manual fallback.
+=======
+        // Manual Assign Button
+>>>>>>> 74b00b8 (OR-79 Menambahkan Tombol "+")
         if (widget.canManageTasks)
           InkWell(
             onTap: () => _showSmartAssignWizard(task),
