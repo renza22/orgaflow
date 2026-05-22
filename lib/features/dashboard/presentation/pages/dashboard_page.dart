@@ -11,6 +11,8 @@ import '../../../../core/supabase_config.dart';
 import '../../../../core/utils/message_helper.dart';
 import '../../../project/presentation/presenters/projects_presenter.dart';
 import '../../models/project_model.dart';
+import '../../models/activity_log_model.dart';
+import '../../widgets/activity_log_widget.dart';
 import '../../../organization/data/repositories/organization_repository.dart';
 import '../../../projects/presentation/pages/project_board_page.dart';
 import '../../../notifications/widgets/overload_notification_banner.dart';
@@ -46,6 +48,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
   bool _canManageProjects = false;
   int? _organizationLogoVersion;
   String? _projectErrorMessage;
+  List<ActivityLog> _activityLogs = [];
 
   @override
   void initState() {
@@ -53,8 +56,15 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     _updateTime();
     unawaited(_loadSessionContext());
     unawaited(_loadProjects());
+    _loadActivityLogs();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _updateTime();
+    });
+  }
+
+  void _loadActivityLogs() {
+    setState(() {
+      _activityLogs = ActivityLog.getMockData();
     });
   }
 
@@ -448,6 +458,13 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
 
                     // Project Grid
                     _buildProjectGrid(),
+                    const SizedBox(height: 40),
+
+                    // Activity Log
+                    ActivityLogWidget(
+                      activities: _activityLogs,
+                      isLive: true,
+                    ),
                   ],
                 ),
               ),
