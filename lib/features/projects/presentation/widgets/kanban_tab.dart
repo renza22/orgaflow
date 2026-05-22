@@ -14,10 +14,14 @@ class KanbanTab extends StatefulWidget {
   final bool isLoadingAssignableMembers;
   final String? assignableMembersError;
 <<<<<<< HEAD
+<<<<<<< HEAD
   final AssignTaskPresenter assignTaskPresenter;
 =======
   final String? currentUserEmail;
 >>>>>>> 74b00b8 (OR-79 Menambahkan Tombol "+")
+=======
+  final String? currentUserEmail;
+>>>>>>> 74b00b808dd81e167d51ac78d50e90b916a5b452
   final Future<void> Function(int taskId, TaskStatus newStatus) onMoveTask;
   final VoidCallback onAddTask;
   final ValueChanged<Task> onEditTask;
@@ -33,10 +37,14 @@ class KanbanTab extends StatefulWidget {
     required this.isLoadingAssignableMembers,
     required this.assignableMembersError,
 <<<<<<< HEAD
+<<<<<<< HEAD
     required this.assignTaskPresenter,
 =======
     this.currentUserEmail,
 >>>>>>> 74b00b8 (OR-79 Menambahkan Tombol "+")
+=======
+    this.currentUserEmail,
+>>>>>>> 74b00b808dd81e167d51ac78d50e90b916a5b452
     required this.onMoveTask,
     required this.onAddTask,
     required this.onEditTask,
@@ -313,11 +321,14 @@ class _KanbanTabState extends State<KanbanTab> {
           builder: (dialogContext) => TaskDetailDialog(
             task: task,
 <<<<<<< HEAD
+<<<<<<< HEAD
             onEdit:
                 widget.canManageTasks ? () => widget.onEditTask(task) : null,
             onDelete:
                 widget.canManageTasks ? () => widget.onDeleteTask(task) : null,
 =======
+=======
+>>>>>>> 74b00b808dd81e167d51ac78d50e90b916a5b452
             currentUserEmail: widget.currentUserEmail,
             canManageTasks: widget.canManageTasks,
             onEdit: widget.canManageTasks ? () => widget.onEditTask(task) : null,
@@ -728,9 +739,12 @@ class _KanbanTabState extends State<KanbanTab> {
           ),
         ),
 <<<<<<< HEAD
+<<<<<<< HEAD
         const SizedBox(width: 8),
         // Assign button opens Smart Assign Wizard with manual fallback.
 =======
+=======
+>>>>>>> 74b00b808dd81e167d51ac78d50e90b916a5b452
         // Manual Assign Button
 >>>>>>> 74b00b8 (OR-79 Menambahkan Tombol "+")
         if (widget.canManageTasks)
