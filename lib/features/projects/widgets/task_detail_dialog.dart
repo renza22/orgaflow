@@ -49,11 +49,22 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
   }
 
   bool get _isAssignedToCurrentUser {
-    return widget.currentUserEmail != null &&
-        widget.task.assignee.toLowerCase().contains(widget.currentUserEmail!.toLowerCase());
+    if (widget.currentUserEmail == null || widget.task.assignee.isEmpty) {
+      return false;
+    }
+    return widget.task.assignee
+        .toLowerCase()
+        .contains(widget.currentUserEmail!.toLowerCase());
   }
 
+  // PENTING: Hanya member yang di-assign yang bisa menambah sub-task
+  // Admin TIDAK bisa menambah sub-task (hanya bisa melihat)
   bool get _canAddSubTasks {
+    return _isAssignedToCurrentUser; // Hanya assigned member, bukan admin
+  }
+
+  // Admin bisa melihat sub-task tapi tidak bisa edit
+  bool get _canViewSubTasks {
     return _isAssignedToCurrentUser || widget.canManageTasks;
   }
 
@@ -226,23 +237,77 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
         ),
         const SizedBox(height: 24),
 
-        // Checklist / Sub-tasks
+        // Sub-tasks Section
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Icon(Icons.checklist_outlined,
-                size: 18, color: Colors.grey.shade700),
-            const SizedBox(width: 8),
-            Text(
-              'Checklist (${_subTasks.where((st) => st.isCompleted).length}/${_subTasks.length})',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade900,
-              ),
+            Row(
+              children: [
+                Icon(Icons.checklist_outlined,
+                    size: 18, color: Colors.grey.shade700),
+                const SizedBox(width: 8),
+                Text(
+                  'Sub-tasks',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade900,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (_subTasks.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${_subTasks.where((st) => st.isCompleted).length}/${_subTasks.length}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6C5CE7),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
         const SizedBox(height: 12),
+
+        // Info box untuk member
+        if (_isAssignedToCurrentUser)
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F9FF),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFBAE6FD)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Sub-task adalah to-do list pribadi Anda. Otomatis ter-assign ke Anda dan tidak menambah beban jam kerja organisasi.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue.shade900,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         
         // Sub-task list
         if (_subTasks.isNotEmpty)
@@ -264,7 +329,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
               child: Row(
                 children: [
                   InkWell(
-                    onTap: _canAddSubTasks
+                    onTap: _isAssignedToCurrentUser
                         ? () => _toggleSubTask(subTask.id)
                         : null,
                     child: Container(
@@ -290,20 +355,43 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      subTask.title,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: subTask.isCompleted
-                            ? Colors.grey.shade600
-                            : Colors.grey.shade900,
-                        decoration: subTask.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          subTask.title,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: subTask.isCompleted
+                                ? Colors.grey.shade600
+                                : Colors.grey.shade900,
+                            decoration: subTask.isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.person_outline,
+                                size: 11, color: Colors.grey.shade500),
+                            const SizedBox(width: 4),
+                            Text(
+                              widget.task.assignee.isNotEmpty
+                                  ? widget.task.assignee
+                                  : 'Unassigned',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  if (_canAddSubTasks)
+                  if (_isAssignedToCurrentUser)
                     IconButton(
                       icon: Icon(Icons.close,
                           size: 16, color: Colors.grey.shade600),
@@ -316,8 +404,8 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
             );
           }).toList(),
         
-        // Add sub-task input (only for assigned member or admin)
-        if (_canAddSubTasks) ...[
+        // Add sub-task input (only for assigned member, NOT admin)
+        if (_isAssignedToCurrentUser) ...[
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(16),
@@ -326,62 +414,101 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _subTaskController,
-                    decoration: InputDecoration(
-                      hintText: 'Tambah sub-task...',
-                      hintStyle: TextStyle(
-                        color: Colors.grey.shade400,
-                        fontSize: 14,
+                Row(
+                  children: [
+                    const Icon(Icons.lock_outline, size: 14, color: Color(0xFF6C5CE7)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Assigned to: ${widget.task.assignee}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6C5CE7),
                       ),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                      isDense: true,
                     ),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF1F2937),
-                    ),
-                    onSubmitted: (_) => _addSubTask(),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Material(
-                  color: const Color(0xFF6C5CE7),
-                  borderRadius: BorderRadius.circular(10),
-                  child: InkWell(
-                    onTap: _addSubTask,
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.add,
-                        color: Colors.white,
-                        size: 24,
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _subTaskController,
+                        decoration: InputDecoration(
+                          hintText: 'Tambah sub-task baru...',
+                          hintStyle: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 14,
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                          isDense: true,
+                        ),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF1F2937),
+                        ),
+                        onSubmitted: (_) => _addSubTask(),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Material(
+                      color: const Color(0xFF6C5CE7),
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: _addSubTask,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.add,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
         ],
         
-        if (!_canAddSubTasks && _subTasks.isEmpty)
-          Text(
-            'Tidak ada checklist',
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey.shade500,
+        // Message for non-assigned users
+        if (!_isAssignedToCurrentUser && _subTasks.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    widget.canManageTasks
+                        ? 'Belum ada sub-task. Hanya member yang di-assign yang bisa menambah sub-task.'
+                        : 'Belum ada sub-task untuk tugas ini.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         

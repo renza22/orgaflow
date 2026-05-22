@@ -8,6 +8,8 @@ import '../../../../core/widgets/responsive_sidebar.dart';
 import '../../../profile/domain/models/profile_task_history_model.dart';
 import '../../../profile/domain/models/user_profile_detail_model.dart';
 import '../../../profile/presentation/presenters/profile_presenter.dart';
+import '../../widgets/gradient_capacity_bar.dart';
+import '../../widgets/gradient_skill_bar.dart';
 
 class MemberProfilePage extends StatefulWidget {
   const MemberProfilePage({
@@ -784,13 +786,37 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
               ),
             )
           else
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: (score / 100).clamp(0.0, 1.0).toDouble(),
-                backgroundColor: Colors.grey.shade200,
-                color: const Color(0xFF6C5CE7),
-                minHeight: 8,
+            Container(
+              height: 8,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: FractionallySizedBox(
+                  widthFactor: (score / 100).clamp(0.0, 1.0).toDouble(),
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF6C5CE7), // Purple
+                          Color(0xFF8B7FE8), // Light purple
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF6C5CE7).withValues(alpha: 0.3),
+                          blurRadius: 3,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
         ],
@@ -924,14 +950,10 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
             ],
           ),
           const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: profile.progressValue,
-              backgroundColor: Colors.grey.shade200,
-              color: statusColor,
-              minHeight: isSmallScreen ? 10 : 12,
-            ),
+          GradientCapacityBar(
+            percentage: profile.loadPercentage,
+            height: isSmallScreen ? 10 : 12,
+            borderRadius: 4,
           ),
           const SizedBox(height: 8),
           Text(
@@ -1152,14 +1174,10 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: skill.proficiencyPercent / 100,
-                        backgroundColor: Colors.grey.shade200,
-                        color: _proficiencyColor(skill.proficiencyPercent),
-                        minHeight: isSmallScreen ? 6 : 8,
-                      ),
+                    GradientSkillBar(
+                      percentage: skill.proficiencyPercent.toDouble(),
+                      height: isSmallScreen ? 6 : 8,
+                      borderRadius: 4,
                     ),
                   ],
                 ),
@@ -1393,19 +1411,6 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
       default:
         return Colors.grey.shade600;
     }
-  }
-
-  Color _proficiencyColor(int proficiency) {
-    if (proficiency >= 90) {
-      return Colors.green;
-    }
-    if (proficiency >= 75) {
-      return const Color(0xFF6C5CE7);
-    }
-    if (proficiency >= 60) {
-      return Colors.orange;
-    }
-    return Colors.grey;
   }
 
   String _taskDateText(ProfileTaskHistoryModel task) {

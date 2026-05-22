@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../../dashboard/widgets/circular_gradient_progress.dart';
 import '../../../workload/domain/models/workload_item_model.dart';
 import '../../models/task_model.dart';
 
@@ -146,40 +147,10 @@ class OverviewTab extends StatelessWidget {
           const SizedBox(height: 24),
           Row(
             children: [
-              SizedBox(
-                width: 140,
-                height: 140,
-                child: CustomPaint(
-                  painter: _CircularProgressPainter(
-                    progress:
-                        (_progressPercent / 100).clamp(0.0, 1.0).toDouble(),
-                    bgColor: Colors.grey.shade200,
-                    progressColor: const Color(0xFF6C5CE7),
-                    secondaryColor: const Color(0xFF00CEC9),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${_progressPercent.round()}%',
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1F2937),
-                          ),
-                        ),
-                        Text(
-                          'Complete',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              CircularGradientProgress(
+                percentage: _progressPercent,
+                size: 140,
+                strokeWidth: 12,
               ),
               const SizedBox(width: 28),
               Expanded(
@@ -701,64 +672,4 @@ class OverviewTab extends StatelessWidget {
 
     return '${date.day} ${months[date.month - 1]}';
   }
-}
-
-class _CircularProgressPainter extends CustomPainter {
-  _CircularProgressPainter({
-    required this.progress,
-    required this.bgColor,
-    required this.progressColor,
-    required this.secondaryColor,
-  });
-
-  final double progress;
-  final Color bgColor;
-  final Color progressColor;
-  final Color secondaryColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 10;
-    const strokeWidth = 12.0;
-
-    final bgPaint = Paint()
-      ..color = bgColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawCircle(center, radius, bgPaint);
-
-    final progressPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    final sweepAngle = 2 * pi * progress;
-    final purpleAngle = sweepAngle * 0.7;
-    final tealAngle = sweepAngle * 0.3;
-
-    progressPaint.color = progressColor;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -pi / 2,
-      purpleAngle,
-      false,
-      progressPaint,
-    );
-
-    if (tealAngle > 0) {
-      progressPaint.color = secondaryColor;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        -pi / 2 + purpleAngle,
-        tealAngle,
-        false,
-        progressPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

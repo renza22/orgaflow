@@ -5,6 +5,7 @@ import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
 import '../../../notifications/widgets/overload_badge.dart';
 import '../../models/member_model.dart';
+import '../../widgets/gradient_capacity_bar.dart';
 import '../presenters/members_presenter.dart';
 import 'member_profile_page.dart';
 
@@ -564,14 +565,10 @@ class _MembersPageState extends State<MembersPage> {
                   ],
                 ),
                 const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: member.progressValue,
-                    backgroundColor: Colors.grey.shade200,
-                    color: statusConfig.color,
-                    minHeight: 8,
-                  ),
+                GradientCapacityBar(
+                  percentage: percentage,
+                  height: 8,
+                  borderRadius: 4,
                 ),
                 const SizedBox(height: 6),
                 Center(

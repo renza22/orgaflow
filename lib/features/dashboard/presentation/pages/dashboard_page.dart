@@ -13,6 +13,7 @@ import '../../../project/presentation/presenters/projects_presenter.dart';
 import '../../models/project_model.dart';
 import '../../models/activity_log_model.dart';
 import '../../widgets/activity_log_widget.dart';
+import '../../widgets/circular_gradient_progress.dart';
 import '../../../organization/data/repositories/organization_repository.dart';
 import '../../../projects/presentation/pages/project_board_page.dart';
 import '../../../notifications/widgets/overload_notification_banner.dart';
@@ -652,16 +653,21 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       return const SizedBox.shrink();
     }
 
-    return OverloadNotificationBanner(
-      loadPercentage: loadPercentage,
-      onContactCoordinator: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Fitur hubungi koordinator akan segera hadir'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      },
+    return Column(
+      children: [
+        OverloadNotificationBanner(
+          loadPercentage: loadPercentage,
+          onContactCoordinator: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Fitur hubungi koordinator akan segera hadir'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 
@@ -2008,40 +2014,145 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
             ),
             const SizedBox(height: 20),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Progress',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
+                // Circular Progress
+                CircularGradientProgress(
+                  percentage: project.progress.toDouble(),
+                  size: 100,
+                  strokeWidth: 10,
                 ),
-                Text(
-                  '${project.progress}%',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1F2937),
+                const SizedBox(width: 24),
+                // Project Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Time Remaining
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDDD6FE),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.access_time,
+                                size: 18,
+                                color: Color(0xFF6C5CE7),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Time Remaining',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    project.deadline != null
+                                        ? _getTimeRemaining(project.deadline!)
+                                        : 'Tanpa deadline',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF1F2937),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Tasks Progress
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFCCFBF1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.task_alt,
+                                size: 18,
+                                color: Color(0xFF00CEC9),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Tasks Progress',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${project.completedTasks}/${project.totalTasks}',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF1F2937),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: project.progress / 100,
-                backgroundColor: Colors.grey.shade200,
-                color: project.color,
-                minHeight: 8,
-              ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _getTimeRemaining(DateTime deadline) {
+    final now = DateTime.now();
+    final difference = deadline.difference(now);
+
+    if (difference.isNegative) {
+      return 'Terlambat ${difference.inDays.abs()} hari';
+    }
+
+    if (difference.inDays > 0) {
+      return 'Tersisa ${difference.inDays} hari';
+    } else if (difference.inHours > 0) {
+      return 'Tersisa ${difference.inHours} jam';
+    } else {
+      return 'Tersisa ${difference.inMinutes} menit';
+    }
   }
 
   Widget _buildProjectListCard(Project project) {
