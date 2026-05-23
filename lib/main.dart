@@ -15,6 +15,7 @@ import 'features/dashboard/presentation/pages/dashboard_page.dart';
 import 'features/members/presentation/pages/members_page.dart';
 import 'features/projects/presentation/pages/projects_page.dart';
 import 'features/fairness/presentation/pages/fairness_dashboard_page.dart';
+import 'features/fairness/presentation/pages/rebalance_wizard_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -92,13 +93,16 @@ class MyApp extends StatelessWidget {
           case '/fairness':
             page = const FairnessDashboardPage();
             break;
+          case '/rebalance-wizard':
+            page = const RebalanceWizardPage();
+            break;
           case '/organization-settings':
             page = const OrganizationSettingsPage();
             break;
           default:
             page = const SessionResolverPage();
         }
-        
+
         return PageRouteBuilder(
           settings: settings,
           pageBuilder: (context, animation, secondaryAnimation) => page,

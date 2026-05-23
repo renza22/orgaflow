@@ -4,6 +4,7 @@ import '../../../../core/result/result.dart';
 import '../../domain/models/fairness_summary_model.dart';
 import '../../domain/models/fairness_trend_model.dart';
 import '../../domain/models/member_fairness_breakdown_model.dart';
+import '../../models/rebalance_model.dart';
 import '../datasources/fairness_remote_datasource.dart';
 
 class FairnessRepository {
@@ -103,6 +104,68 @@ class FairnessRepository {
       return Result<void>.success(null);
     } catch (error) {
       return Result<void>.failure(ErrorMapper.map(error));
+    }
+  }
+
+  Future<Result<List<RebalanceItem>>> generateAutoRebalancePlan({
+    required String organizationId,
+    int maxItems = 5,
+    String? projectId,
+  }) async {
+    try {
+      final normalizedOrganizationId = organizationId.trim();
+      if (normalizedOrganizationId.isEmpty) {
+        return Result<List<RebalanceItem>>.failure(
+          const AppError('User belum memiliki organisasi aktif.'),
+        );
+      }
+
+      final normalizedProjectId = projectId?.trim();
+      final items = await _remoteDatasource.generateAutoRebalancePlan(
+        organizationId: normalizedOrganizationId,
+        maxItems: maxItems,
+        projectId: normalizedProjectId == null || normalizedProjectId.isEmpty
+            ? null
+            : normalizedProjectId,
+      );
+
+      return Result<List<RebalanceItem>>.success(items);
+    } catch (error) {
+      return Result<List<RebalanceItem>>.failure(ErrorMapper.map(error));
+    }
+  }
+
+  Future<Result<Map<String, dynamic>>> executeRebalancePlan({
+    required String planId,
+    required List<String> itemIds,
+  }) async {
+    try {
+      final normalizedPlanId = planId.trim();
+      if (normalizedPlanId.isEmpty) {
+        return Result<Map<String, dynamic>>.failure(
+          const AppError('Plan rebalance tidak valid.'),
+        );
+      }
+
+      final normalizedItemIds = itemIds
+          .map((itemId) => itemId.trim())
+          .where((itemId) => itemId.isNotEmpty)
+          .toList();
+
+      if (normalizedItemIds.isEmpty) {
+        return Result<Map<String, dynamic>>.failure(
+          const AppError('Pilih minimal satu rekomendasi untuk dieksekusi.'),
+        );
+      }
+
+      final result = await _remoteDatasource.executeRebalancePlan(
+        planId: normalizedPlanId,
+        itemIds: normalizedItemIds,
+      );
+
+      return Result<Map<String, dynamic>>.success(result);
+    } catch (error) {
+      return Result<Map<String, dynamic>>.failure(ErrorMapper.map(error));
     }
   }
 }

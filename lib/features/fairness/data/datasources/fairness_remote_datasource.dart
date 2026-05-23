@@ -4,6 +4,7 @@ import '../../../../core/supabase_config.dart';
 import '../../domain/models/fairness_summary_model.dart';
 import '../../domain/models/fairness_trend_model.dart';
 import '../../domain/models/member_fairness_breakdown_model.dart';
+import '../../models/rebalance_model.dart';
 
 class FairnessRemoteDatasource {
   FairnessRemoteDatasource({
@@ -87,6 +88,38 @@ class FairnessRemoteDatasource {
         'p_score_date': _formatDate(scoreDate),
       },
     );
+  }
+
+  Future<List<RebalanceItem>> generateAutoRebalancePlan({
+    required String organizationId,
+    int maxItems = 5,
+    String? projectId,
+  }) async {
+    final response = await _client.rpc(
+      'generate_auto_rebalance_plan',
+      params: {
+        'p_organization_id': organizationId,
+        'p_max_items': maxItems,
+        'p_project_id': projectId,
+      },
+    );
+
+    return _extractRows(response).map(RebalanceItem.fromJson).toList();
+  }
+
+  Future<Map<String, dynamic>> executeRebalancePlan({
+    required String planId,
+    required List<String> itemIds,
+  }) async {
+    final response = await _client.rpc(
+      'execute_rebalance_plan',
+      params: {
+        'p_plan_id': planId,
+        'p_item_ids': itemIds,
+      },
+    );
+
+    return _extractSingleRow(response) ?? const {};
   }
 
   Map<String, dynamic>? _extractSingleRow(dynamic response) {
