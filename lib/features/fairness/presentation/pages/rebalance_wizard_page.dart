@@ -12,7 +12,7 @@ class RebalanceWizardPage extends StatefulWidget {
 
 class _RebalanceWizardPageState extends State<RebalanceWizardPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  
+
   List<RebalanceItem> _items = [
     RebalanceItem(
       id: 1,
@@ -72,7 +72,10 @@ class _RebalanceWizardPageState extends State<RebalanceWizardPage> {
       ),
       drawer: (isSmallScreen || isMediumScreen)
           ? Drawer(
-              child: ResponsiveSidebar(currentRoute: '/fairness'),
+              child: ResponsiveSidebar(
+                currentRoute: '/fairness',
+                onClose: () => Navigator.of(context).pop(),
+              ),
             )
           : null,
       body: Row(
@@ -80,7 +83,7 @@ class _RebalanceWizardPageState extends State<RebalanceWizardPage> {
           // Sidebar for desktop
           if (!isSmallScreen && !isMediumScreen)
             const ResponsiveSidebar(currentRoute: '/fairness'),
-          
+
           // Main Content
           Expanded(
             child: SingleChildScrollView(
@@ -144,7 +147,8 @@ class _RebalanceWizardPageState extends State<RebalanceWizardPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  ..._items.map((item) => _buildRebalanceCard(item, isSmallScreen)),
+                  ..._items
+                      .map((item) => _buildRebalanceCard(item, isSmallScreen)),
 
                   const SizedBox(height: 24),
 
@@ -155,7 +159,8 @@ class _RebalanceWizardPageState extends State<RebalanceWizardPage> {
                       OutlinedButton(
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
                         ),
                         child: const Text('Cancel'),
                       ),
@@ -165,7 +170,8 @@ class _RebalanceWizardPageState extends State<RebalanceWizardPage> {
                             ? () {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('Executing $_approvedCount approved changes'),
+                                    content: Text(
+                                        'Executing $_approvedCount approved changes'),
                                     backgroundColor: Colors.green,
                                   ),
                                 );
@@ -174,7 +180,8 @@ class _RebalanceWizardPageState extends State<RebalanceWizardPage> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF6C5CE7),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
                         ),
                         child: Text('Execute $_approvedCount Approved Changes'),
                       ),
@@ -193,11 +200,14 @@ class _RebalanceWizardPageState extends State<RebalanceWizardPage> {
     if (isSmallScreen) {
       return Column(
         children: [
-          _buildSummaryCard('Total Suggestions', '${_items.length}', null, null),
+          _buildSummaryCard(
+              'Total Suggestions', '${_items.length}', null, null),
           const SizedBox(height: 12),
-          _buildSummaryCard('Approved', '$_approvedCount', Colors.green, Colors.green.shade50),
+          _buildSummaryCard('Approved', '$_approvedCount', Colors.green,
+              Colors.green.shade50),
           const SizedBox(height: 12),
-          _buildSummaryCard('Rejected', '$_rejectedCount', Colors.red, Colors.red.shade50),
+          _buildSummaryCard(
+              'Rejected', '$_rejectedCount', Colors.red, Colors.red.shade50),
           const SizedBox(height: 12),
           _buildSummaryCard('Expected Impact', '+12%', null, null),
         ],
@@ -206,18 +216,26 @@ class _RebalanceWizardPageState extends State<RebalanceWizardPage> {
 
     return Row(
       children: [
-        Expanded(child: _buildSummaryCard('Total Suggestions', '${_items.length}', null, null)),
+        Expanded(
+            child: _buildSummaryCard(
+                'Total Suggestions', '${_items.length}', null, null)),
         const SizedBox(width: 16),
-        Expanded(child: _buildSummaryCard('Approved', '$_approvedCount', Colors.green, Colors.green.shade50)),
+        Expanded(
+            child: _buildSummaryCard('Approved', '$_approvedCount',
+                Colors.green, Colors.green.shade50)),
         const SizedBox(width: 16),
-        Expanded(child: _buildSummaryCard('Rejected', '$_rejectedCount', Colors.red, Colors.red.shade50)),
+        Expanded(
+            child: _buildSummaryCard(
+                'Rejected', '$_rejectedCount', Colors.red, Colors.red.shade50)),
         const SizedBox(width: 16),
-        Expanded(child: _buildSummaryCard('Expected Impact', '+12%', null, null)),
+        Expanded(
+            child: _buildSummaryCard('Expected Impact', '+12%', null, null)),
       ],
     );
   }
 
-  Widget _buildSummaryCard(String label, String value, Color? textColor, Color? bgColor) {
+  Widget _buildSummaryCard(
+      String label, String value, Color? textColor, Color? bgColor) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(

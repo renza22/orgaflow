@@ -20,14 +20,54 @@ class _CapacityOverviewPageState extends State<CapacityOverviewPage> {
     final isMediumScreen = screenWidth >= 600 && screenWidth < 1024;
 
     final List<MemberCapacity> members = [
-      MemberCapacity(name: "Sarah Chen", role: "Lead Designer", max: 40, used: 37, status: CapacityStatus.overloaded),
-      MemberCapacity(name: "Mike Johnson", role: "Senior Developer", max: 40, used: 35, status: CapacityStatus.warning),
-      MemberCapacity(name: "Emma Davis", role: "Product Manager", max: 35, used: 30, status: CapacityStatus.warning),
-      MemberCapacity(name: "Alex Kim", role: "DevOps Engineer", max: 40, used: 29, status: CapacityStatus.active),
-      MemberCapacity(name: "Tom Wilson", role: "QA Engineer", max: 40, used: 27, status: CapacityStatus.active),
-      MemberCapacity(name: "Lisa Anderson", role: "Marketing Lead", max: 35, used: 23, status: CapacityStatus.active),
-      MemberCapacity(name: "James Brown", role: "Backend Developer", max: 40, used: 23, status: CapacityStatus.active),
-      MemberCapacity(name: "Sophia Martinez", role: "UX Designer", max: 35, used: 16, status: CapacityStatus.active),
+      MemberCapacity(
+          name: "Sarah Chen",
+          role: "Lead Designer",
+          max: 40,
+          used: 37,
+          status: CapacityStatus.overloaded),
+      MemberCapacity(
+          name: "Mike Johnson",
+          role: "Senior Developer",
+          max: 40,
+          used: 35,
+          status: CapacityStatus.warning),
+      MemberCapacity(
+          name: "Emma Davis",
+          role: "Product Manager",
+          max: 35,
+          used: 30,
+          status: CapacityStatus.warning),
+      MemberCapacity(
+          name: "Alex Kim",
+          role: "DevOps Engineer",
+          max: 40,
+          used: 29,
+          status: CapacityStatus.active),
+      MemberCapacity(
+          name: "Tom Wilson",
+          role: "QA Engineer",
+          max: 40,
+          used: 27,
+          status: CapacityStatus.active),
+      MemberCapacity(
+          name: "Lisa Anderson",
+          role: "Marketing Lead",
+          max: 35,
+          used: 23,
+          status: CapacityStatus.active),
+      MemberCapacity(
+          name: "James Brown",
+          role: "Backend Developer",
+          max: 40,
+          used: 23,
+          status: CapacityStatus.active),
+      MemberCapacity(
+          name: "Sophia Martinez",
+          role: "UX Designer",
+          max: 35,
+          used: 16,
+          status: CapacityStatus.active),
     ];
 
     final totalCapacity = members.fold(0, (sum, m) => sum + m.max);
@@ -46,7 +86,10 @@ class _CapacityOverviewPageState extends State<CapacityOverviewPage> {
       ),
       drawer: (isSmallScreen || isMediumScreen)
           ? Drawer(
-              child: ResponsiveSidebar(currentRoute: '/fairness'),
+              child: ResponsiveSidebar(
+                currentRoute: '/fairness',
+                onClose: () => Navigator.of(context).pop(),
+              ),
             )
           : null,
       body: Row(
@@ -54,7 +97,7 @@ class _CapacityOverviewPageState extends State<CapacityOverviewPage> {
           // Sidebar for desktop
           if (!isSmallScreen && !isMediumScreen)
             const ResponsiveSidebar(currentRoute: '/fairness'),
-          
+
           // Main Content
           Expanded(
             child: SingleChildScrollView(
@@ -150,7 +193,8 @@ class _CapacityOverviewPageState extends State<CapacityOverviewPage> {
 
     return Row(
       children: [
-        Expanded(child: _buildSummaryCard('Total Capacity', '${totalCapacity}h')),
+        Expanded(
+            child: _buildSummaryCard('Total Capacity', '${totalCapacity}h')),
         const SizedBox(width: 16),
         Expanded(child: _buildSummaryCard('Used', '${totalUsed}h')),
         const SizedBox(width: 16),
@@ -270,11 +314,13 @@ class _CapacityOverviewPageState extends State<CapacityOverviewPage> {
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: statusConfig.color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: statusConfig.color.withOpacity(0.3)),
+                  border:
+                      Border.all(color: statusConfig.color.withOpacity(0.3)),
                 ),
                 child: Text(
                   statusConfig.label,

@@ -569,7 +569,10 @@ class _ProjectsPageState extends State<ProjectsPage> with RouteAware {
       ),
       drawer: (isSmallScreen || isMediumScreen)
           ? Drawer(
-              child: ResponsiveSidebar(currentRoute: '/projects'),
+              child: ResponsiveSidebar(
+                currentRoute: '/projects',
+                onClose: () => Navigator.of(context).pop(),
+              ),
             )
           : null,
       body: Row(

@@ -434,7 +434,7 @@ class _TeamTabState extends State<TeamTab> {
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             decoration: BoxDecoration(
               color: Colors.grey.shade50,
               borderRadius:
@@ -443,31 +443,39 @@ class _TeamTabState extends State<TeamTab> {
             ),
             child: Row(children: [
               const Expanded(
-                  flex: 3,
-                  child: Text('Anggota',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF6B7280)))),
+                flex: 4,
+                child: Text('Anggota',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280))),
+              ),
               const Expanded(
-                  flex: 2,
-                  child: Text('Role',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF6B7280)))),
+                flex: 3,
+                child: Text('Role',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280))),
+              ),
               const Expanded(
-                  child: Text('Tasks',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF6B7280)))),
+                flex: 2,
+                child: Text('Tasks',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280))),
+              ),
               const Expanded(
-                  child: Text('Progress',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF6B7280)))),
+                flex: 3,
+                child: Text('Progress',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280))),
+              ),
               const SizedBox(width: 40),
             ]),
           ),
@@ -480,19 +488,47 @@ class _TeamTabState extends State<TeamTab> {
   Widget _buildSummaryRow(List<TeamMember> members) {
     final totalTasks = members.fold<int>(0, (s, m) => s + m.tasksAssigned);
     final completedTasks = members.fold<int>(0, (s, m) => s + m.tasksCompleted);
-    return Row(children: [
-      Expanded(
-          child: _buildMiniStat('Total Anggota', '${members.length}',
-              Icons.people, const Color(0xFF6C5CE7))),
-      const SizedBox(width: 12),
-      Expanded(
-          child: _buildMiniStat('Total Tasks', '$totalTasks', Icons.task_alt,
-              const Color(0xFF00CEC9))),
-      const SizedBox(width: 12),
-      Expanded(
-          child: _buildMiniStat('Selesai', '$completedTasks',
-              Icons.check_circle, const Color(0xFF00B894))),
-    ]);
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final isStacked = constraints.maxWidth < 680;
+      if (isStacked) {
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            SizedBox(
+              width: constraints.maxWidth,
+              child: _buildMiniStat('Total Anggota', '${members.length}',
+                  Icons.people, const Color(0xFF6C5CE7)),
+            ),
+            SizedBox(
+              width: constraints.maxWidth,
+              child: _buildMiniStat('Total Tasks', '$totalTasks',
+                  Icons.task_alt, const Color(0xFF00CEC9)),
+            ),
+            SizedBox(
+              width: constraints.maxWidth,
+              child: _buildMiniStat('Selesai', '$completedTasks',
+                  Icons.check_circle, const Color(0xFF00B894)),
+            ),
+          ],
+        );
+      }
+
+      return Row(children: [
+        Expanded(
+            child: _buildMiniStat('Total Anggota', '${members.length}',
+                Icons.people, const Color(0xFF6C5CE7))),
+        const SizedBox(width: 12),
+        Expanded(
+            child: _buildMiniStat('Total Tasks', '$totalTasks', Icons.task_alt,
+                const Color(0xFF00CEC9))),
+        const SizedBox(width: 12),
+        Expanded(
+            child: _buildMiniStat('Selesai', '$completedTasks',
+                Icons.check_circle, const Color(0xFF00B894))),
+      ]);
+    });
   }
 
   Widget _buildMiniStat(
@@ -514,13 +550,21 @@ class _TeamTabState extends State<TeamTab> {
           child: Icon(icon, color: color, size: 18),
         ),
         const SizedBox(width: 12),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(value,
-              style: TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.w700, color: color)),
-          Text(label,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-        ]),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value,
+                  style: TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w700, color: color)),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
       ]),
     );
   }
@@ -531,113 +575,140 @@ class _TeamTabState extends State<TeamTab> {
         : 0.0;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
       ),
-      child: Row(children: [
-        Expanded(
-          flex: 3,
-          child: Row(children: [
-            _buildTeamAvatar(member),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    member.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 4,
+            child: Row(
+              children: [
+                _buildTeamAvatar(member),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        member.name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _workloadStatusLabel(member.workloadStatus),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _workloadStatusColor(member.workloadStatus),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    _workloadStatusLabel(member.workloadStatus),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _workloadStatusColor(member.workloadStatus),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ]),
-        ),
-        Expanded(
-          flex: 2,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: member.avatarColor.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(member.role,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: member.avatarColor,
-                    fontWeight: FontWeight.w500),
-                textAlign: TextAlign.center),
-          ),
-        ),
-        Expanded(
-          child: Text('${member.tasksCompleted}/${member.tasksAssigned}',
-              style:
-                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-        ),
-        Expanded(
-          child: Row(children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: Colors.grey.shade200,
-                  valueColor: AlwaysStoppedAnimation<Color>(progress >= 1.0
-                      ? const Color(0xFF00B894)
-                      : const Color(0xFF6C5CE7)),
-                  minHeight: 6,
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            flex: 3,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: member.avatarColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                member.role,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: member.avatarColor,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
               ),
             ),
-            const SizedBox(width: 8),
-            Text('${(progress * 100).round()}%',
-                style:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-          ]),
-        ),
-        const SizedBox(width: 8),
-        PopupMenuButton<String>(
-          icon: Icon(Icons.more_vert, size: 18, color: Colors.grey.shade500),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          itemBuilder: (context) => [
-            const PopupMenuItem(value: 'view', child: Text('Lihat Profil')),
-            const PopupMenuItem(
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '${member.tasksCompleted}/${member.tasksAssigned}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            flex: 3,
+            child: Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation<Color>(progress >= 1.0
+                          ? const Color(0xFF00B894)
+                          : const Color(0xFF6C5CE7)),
+                      minHeight: 8,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '${(progress * 100).round()}%',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, size: 18, color: Colors.grey.shade500),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'view', child: Text('Lihat Profil')),
+              const PopupMenuItem(
                 value: 'remove',
                 child: Text('Hapus dari Proyek',
-                    style: TextStyle(color: Colors.red))),
-          ],
-          onSelected: (value) {
-            if (value == 'view') {
-              Navigator.push(
-                context,
-                NoTransitionPageRoute(
-                  builder: (context) => MemberProfilePage(
-                    memberId: member.memberId,
-                    memberName: member.name,
+                    style: TextStyle(color: Colors.red)),
+              ),
+            ],
+            onSelected: (value) {
+              if (value == 'view') {
+                Navigator.push(
+                  context,
+                  NoTransitionPageRoute(
+                    builder: (context) => MemberProfilePage(
+                      memberId: member.memberId,
+                      memberName: member.name,
+                    ),
                   ),
-                ),
-              );
-            } else if (value == 'remove') {
-              _removeMember(member.id, member.name);
-            }
-          },
-        ),
-      ]),
+                );
+              } else if (value == 'remove') {
+                _removeMember(member.id, member.name);
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -868,8 +939,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
               padding: const EdgeInsets.all(24),
               child: Row(
                 children: [
-                  const Icon(Icons.person_add,
-                      color: Colors.grey, size: 28),
+                  const Icon(Icons.person_add, color: Colors.grey, size: 28),
                   const SizedBox(width: 12),
                   const Text(
                     'Tambah Anggota Proyek',

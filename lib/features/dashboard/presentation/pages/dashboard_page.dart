@@ -425,7 +425,10 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       ),
       drawer: (isSmallScreen || isMediumScreen)
           ? Drawer(
-              child: ResponsiveSidebar(currentRoute: '/dashboard'),
+              child: ResponsiveSidebar(
+                currentRoute: '/dashboard',
+                onClose: () => Navigator.of(context).pop(),
+              ),
             )
           : null,
       body: Row(
@@ -448,7 +451,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
 
                     // Overload Notification Banner
                     _buildOverloadNotification(),
-                    
+
                     // Summary Cards
                     _buildSummaryCards(isSmallScreen),
                     const SizedBox(height: 40),
@@ -641,13 +644,13 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     // Calculate load percentage
     final capacityMax = activeMember.weeklyCapacityHours;
     final capacityUsed = activeMember.capacityUsedHours;
-    
+
     if (capacityMax <= 0) {
       return const SizedBox.shrink();
     }
 
     final loadPercentage = (capacityUsed / capacityMax) * 100;
-    
+
     // Only show if overload (>= 100%)
     if (loadPercentage < 100) {
       return const SizedBox.shrink();
@@ -1868,16 +1871,16 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -1888,246 +1891,176 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  width: 56,
-                  height: 56,
+                  width: 52,
+                  height: 52,
                   decoration: BoxDecoration(
                     color: project.color,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Icon(project.icon, color: Colors.white, size: 28),
+                  child: Icon(project.icon, color: Colors.white, size: 26),
                 ),
-                Row(
-                  children: [
-                    if (project.isUrgent || project.isOverdue)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                if (canManageProject)
+                  PopupMenuButton<String>(
+                    icon: Icon(
+                      Icons.more_vert,
+                      color: Colors.grey.shade500,
+                      size: 22,
+                    ),
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        _showEditProjectDialog(project);
+                      } else if (value == 'delete') {
+                        _showDeleteProjectDialog(project);
+                      }
+                    },
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'edit',
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.warning_amber_rounded,
-                                size: 14, color: Colors.red.shade600),
-                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.edit_outlined,
+                              color: Color(0xFF6C5CE7),
+                              size: 20,
+                            ),
+                            SizedBox(width: 12),
                             Text(
-                              project.isOverdue ? 'Overdue' : 'Urgent',
+                              'Edit Project',
                               style: TextStyle(
-                                color: Colors.red.shade600,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(width: 4),
-                    if (canManageProject)
-                      PopupMenuButton<String>(
-                        icon: Icon(
-                          Icons.more_vert,
-                          color: Colors.grey.shade600,
-                          size: 20,
-                        ),
-                        onSelected: (value) {
-                          if (value == 'edit') {
-                            _showEditProjectDialog(project);
-                          } else if (value == 'delete') {
-                            _showDeleteProjectDialog(project);
-                          }
-                        },
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        itemBuilder: (context) => const [
-                          PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.edit_outlined,
-                                  color: Color(0xFF6C5CE7),
-                                  size: 20,
-                                ),
-                                SizedBox(width: 12),
-                                Text(
-                                  'Edit Project',
-                                  style: TextStyle(
-                                    color: Color(0xFF6C5CE7),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.red,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 12),
-                                Text(
-                                  'Hapus Project',
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      )
-                    else
-                      const SizedBox(width: 20, height: 20),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              project.name,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1F2937),
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              project.description,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade600,
-                height: 1.4,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 20),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Circular Progress
-                CircularGradientProgress(
-                  percentage: project.progress.toDouble(),
-                  size: 100,
-                  strokeWidth: 10,
-                ),
-                const SizedBox(width: 24),
-                // Project Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Time Remaining
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFDDD6FE),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.access_time,
-                                size: 18,
                                 color: Color(0xFF6C5CE7),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Time Remaining',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    project.deadline != null
-                                        ? _getTimeRemaining(project.deadline!)
-                                        : 'Tanpa deadline',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF1F2937),
-                                    ),
-                                  ),
-                                ],
+                                fontSize: 14,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      // Tasks Progress
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                      PopupMenuItem(
+                        value: 'delete',
                         child: Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFCCFBF1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.task_alt,
-                                size: 18,
-                                color: Color(0xFF00CEC9),
-                              ),
+                            Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                              size: 20,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Tasks Progress',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${project.completedTasks}/${project.totalTasks}',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF1F2937),
-                                    ),
-                                  ),
-                                ],
+                            SizedBox(width: 12),
+                            Text(
+                              'Hapus Project',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 14,
                               ),
                             ),
                           ],
                         ),
                       ),
                     ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    project.name,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    project.description,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                      height: 1.5,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Spacer(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Progress',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      Text(
+                        '${project.progress}%',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: LinearProgressIndicator(
+                      value: project.progress / 100,
+                      minHeight: 8,
+                      valueColor: AlwaysStoppedAnimation(project.color),
+                      backgroundColor: project.color.withOpacity(0.18),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '${project.completedTasks} / ${project.totalTasks} task selesai',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: Color(0xFFF2F4F7)),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Icon(
+                  Icons.calendar_today_outlined,
+                  size: 16,
+                  color: Colors.grey.shade500,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    project.deadlineLabel,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  project.deadlineStatusLabel,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color:
+                        project.isOverdue ? Colors.red.shade600 : Colors.teal,
                   ),
                 ),
               ],
@@ -2172,7 +2105,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -2211,9 +2144,9 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                 ],
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             SizedBox(
-              width: 150,
+              width: 120,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

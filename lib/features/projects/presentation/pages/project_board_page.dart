@@ -568,6 +568,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
       key: _scaffoldKey,
       backgroundColor: Colors.grey.shade50,
       body: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isSmallScreen && !isMediumScreen)
             const ResponsiveSidebar(currentRoute: '/projects'),
@@ -721,12 +722,16 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
               children: [
                 const Icon(Icons.access_time, size: 16, color: Colors.white),
                 const SizedBox(width: 6),
-                Text(
-                  _deadlineLabel,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                Flexible(
+                  child: Text(
+                    _deadlineLabel,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

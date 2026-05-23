@@ -49,6 +49,9 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
   }
 
   bool get _isAssignedToCurrentUser {
+    if (widget.task.isAssignedToCurrentUser) {
+      return true;
+    }
     if (widget.currentUserEmail == null || widget.task.assignee.isEmpty) {
       return false;
     }
@@ -142,7 +145,8 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
                       ),
                       if (widget.onEdit != null)
                         IconButton(
-                          icon: Icon(Icons.edit_outlined, color: Colors.grey.shade600),
+                          icon: Icon(Icons.edit_outlined,
+                              color: Colors.grey.shade600),
                           onPressed: () {
                             Navigator.pop(context);
                             widget.onEdit!();
@@ -151,7 +155,8 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
                         ),
                       if (widget.onDelete != null)
                         IconButton(
-                          icon: Icon(Icons.delete_outline, color: Colors.grey.shade600),
+                          icon: Icon(Icons.delete_outline,
+                              color: Colors.grey.shade600),
                           onPressed: () {
                             Navigator.pop(context);
                             widget.onDelete!();
@@ -308,7 +313,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
               ],
             ),
           ),
-        
+
         // Sub-task list
         if (_subTasks.isNotEmpty)
           ..._subTasks.map((subTask) {
@@ -403,7 +408,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
               ),
             );
           }).toList(),
-        
+
         // Add sub-task input (only for assigned member, NOT admin)
         if (_isAssignedToCurrentUser) ...[
           const SizedBox(height: 12),
@@ -419,7 +424,8 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.lock_outline, size: 14, color: Color(0xFF6C5CE7)),
+                    const Icon(Icons.lock_outline,
+                        size: 14, color: Color(0xFF6C5CE7)),
                     const SizedBox(width: 6),
                     Text(
                       'Assigned to: ${widget.task.assignee}',
@@ -456,23 +462,21 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
                         onSubmitted: (_) => _addSubTask(),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Material(
                       color: const Color(0xFF6C5CE7),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       child: InkWell(
                         onTap: _addSubTask,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                          width: 40,
+                          height: 40,
+                          alignment: Alignment.center,
                           child: const Icon(
                             Icons.add,
                             color: Colors.white,
-                            size: 24,
+                            size: 20,
                           ),
                         ),
                       ),
@@ -483,7 +487,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
             ),
           ),
         ],
-        
+
         // Message for non-assigned users
         if (!_isAssignedToCurrentUser && _subTasks.isEmpty)
           Container(
@@ -511,7 +515,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
               ],
             ),
           ),
-        
+
         const SizedBox(height: 24),
 
         // Dependencies
@@ -714,8 +718,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
         const SizedBox(height: 8),
         Row(
           children: [
-            Icon(Icons.access_time,
-                size: 16, color: Colors.grey.shade600),
+            Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
             const SizedBox(width: 6),
             Text(
               '${widget.task.estimatedHours.toInt()} jam',
@@ -767,8 +770,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
         const SizedBox(height: 12),
         Row(
           children: [
-            Icon(Icons.event_outlined,
-                size: 16, color: Colors.grey.shade400),
+            Icon(Icons.event_outlined, size: 16, color: Colors.grey.shade400),
             const SizedBox(width: 6),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -844,8 +846,18 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
 
   String _formatDate(DateTime date) {
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des'
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }

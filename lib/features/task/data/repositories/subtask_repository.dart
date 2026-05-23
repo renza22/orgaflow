@@ -1,5 +1,6 @@
 import '../../../../core/errors/app_error.dart';
-import '../../../../core/utils/result.dart';
+import '../../../../core/errors/error_mapper.dart';
+import '../../../../core/result/result.dart';
 import '../../domain/models/subtask_model.dart';
 import '../datasources/subtask_remote_datasource.dart';
 
@@ -14,7 +15,7 @@ class SubtaskRepository {
       final subtasks = await _remoteDatasource.fetchSubtasks(parentTaskId);
       return Result.success(subtasks);
     } catch (error) {
-      return Result.failure(AppError.fromException(error));
+      return Result<List<SubtaskModel>>.failure(ErrorMapper.map(error));
     }
   }
 
@@ -37,7 +38,7 @@ class SubtaskRepository {
       );
       return Result.success(subtask);
     } catch (error) {
-      return Result.failure(AppError.fromException(error));
+      return Result<SubtaskModel>.failure(ErrorMapper.map(error));
     }
   }
 
@@ -56,7 +57,7 @@ class SubtaskRepository {
       );
       return Result.success(subtask);
     } catch (error) {
-      return Result.failure(AppError.fromException(error));
+      return Result<SubtaskModel>.failure(ErrorMapper.map(error));
     }
   }
 
@@ -65,7 +66,7 @@ class SubtaskRepository {
       await _remoteDatasource.deleteSubtask(subtaskId);
       return Result.success(null);
     } catch (error) {
-      return Result.failure(AppError.fromException(error));
+      return Result<void>.failure(ErrorMapper.map(error));
     }
   }
 }
