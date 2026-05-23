@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/supabase_config.dart';
+import '../../domain/models/burnout_alert_model.dart';
 import '../../domain/models/fairness_summary_model.dart';
 import '../../domain/models/fairness_trend_model.dart';
 import '../../domain/models/member_fairness_breakdown_model.dart';
@@ -88,6 +89,19 @@ class FairnessRemoteDatasource {
         'p_score_date': _formatDate(scoreDate),
       },
     );
+  }
+
+  Future<List<BurnoutAlertModel>> getCriticalBurnoutAlerts(
+    String organizationId,
+  ) async {
+    final response = await _client.rpc(
+      'get_critical_burnout_alerts',
+      params: {
+        'p_organization_id': organizationId,
+      },
+    );
+
+    return _extractRows(response).map(BurnoutAlertModel.fromJson).toList();
   }
 
   Future<List<RebalanceItem>> generateAutoRebalancePlan({
