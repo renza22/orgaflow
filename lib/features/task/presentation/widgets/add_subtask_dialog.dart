@@ -10,7 +10,7 @@ class AddSubtaskDialog extends StatefulWidget {
     super.key,
     this.initialTitle,
     this.initialDescription,
-    required this.assignedToName,
+    this.assignedToName = 'Diri sendiri',
     this.isEdit = false,
   });
 
@@ -89,7 +89,8 @@ class _AddSubtaskDialogState extends State<AddSubtaskDialog> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, size: 16, color: Colors.orange.shade700),
+                  Icon(Icons.info_outline,
+                      size: 16, color: Colors.orange.shade700),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

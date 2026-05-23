@@ -6,7 +6,9 @@ class SubtaskSection extends StatelessWidget {
   final List<SubtaskModel> subtasks;
   final bool isLoading;
   final String? currentUserEmail;
+  final String? currentMemberId;
   final bool canAddSubtask;
+  final bool canEditSubtasks;
   final VoidCallback onAddSubtask;
   final Function(SubtaskModel) onToggleStatus;
   final Function(SubtaskModel) onEdit;
@@ -17,7 +19,9 @@ class SubtaskSection extends StatelessWidget {
     required this.subtasks,
     required this.isLoading,
     required this.currentUserEmail,
+    this.currentMemberId,
     required this.canAddSubtask,
+    required this.canEditSubtasks,
     required this.onAddSubtask,
     required this.onToggleStatus,
     required this.onEdit,
@@ -54,7 +58,7 @@ class SubtaskSection extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '${_completedCount}/${subtasks.length}',
+                      '$_completedCount/${subtasks.length}',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -123,12 +127,11 @@ class SubtaskSection extends StatelessWidget {
     );
   }
 
-  int get _completedCount =>
-      subtasks.where((s) => s.status == 'done').length;
+  int get _completedCount => subtasks.where((s) => s.status == 'done').length;
 
   Widget _buildSubtaskItem(BuildContext context, SubtaskModel subtask) {
     final isDone = subtask.status == 'done';
-    final canEdit = currentUserEmail == subtask.assignedToEmail;
+    final canEdit = canEditSubtasks && _isOwner(subtask);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -232,7 +235,8 @@ class SubtaskSection extends StatelessWidget {
           // Actions
           if (canEdit)
             PopupMenuButton<String>(
-              icon: Icon(Icons.more_vert, size: 18, color: Colors.grey.shade600),
+              icon:
+                  Icon(Icons.more_vert, size: 18, color: Colors.grey.shade600),
               onSelected: (value) {
                 if (value == 'edit') {
                   onEdit(subtask);
@@ -266,6 +270,24 @@ class SubtaskSection extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  bool _isOwner(SubtaskModel subtask) {
+    final memberId = currentMemberId?.trim();
+    if (memberId != null &&
+        memberId.isNotEmpty &&
+        memberId == subtask.assignedMemberId.trim()) {
+      return true;
+    }
+
+    final email = currentUserEmail?.trim().toLowerCase();
+    if (email != null &&
+        email.isNotEmpty &&
+        email == subtask.assignedToEmail.trim().toLowerCase()) {
+      return true;
+    }
+
+    return false;
   }
 
   String _formatDate(DateTime date) {

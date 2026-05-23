@@ -1,18 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/task_model.dart';
-import '../../assignment/domain/models/assignment_member_option.dart';
-
-class SubTask {
-  final int id;
-  final String title;
-  final bool isCompleted;
-
-  SubTask({
-    required this.id,
-    required this.title,
-    required this.isCompleted,
-  });
-}
+import '../../task/data/repositories/subtask_repository.dart';
+import '../../task/domain/models/subtask_model.dart';
+import '../../task/presentation/widgets/add_subtask_dialog.dart';
+import '../../task/presentation/widgets/subtask_section.dart';
 
 class TaskDetailDialog extends StatefulWidget {
   final Task task;
@@ -39,22 +30,21 @@ class TaskDetailDialog extends StatefulWidget {
 }
 
 class _TaskDetailDialogState extends State<TaskDetailDialog> {
-  final List<SubTask> _subTasks = [];
-  final TextEditingController _subTaskController = TextEditingController();
+  final SubtaskRepository _subtaskRepository = SubtaskRepository();
+
+  List<SubtaskModel> _subtasks = const [];
+  bool _isLoadingSubtasks = false;
+  bool _isSavingSubtask = false;
+  String? _subtaskError;
 
   @override
-  void dispose() {
-    _subTaskController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _loadSubtasks();
   }
 
   bool get _isAssignedToCurrentUser {
-    if (widget.currentUserEmail == null || widget.task.assignee.isEmpty) {
-      return false;
-    }
-    return widget.task.assignee
-        .toLowerCase()
-        .contains(widget.currentUserEmail!.toLowerCase());
+    return widget.task.isAssignedToCurrentUser;
   }
 
   // PENTING: Hanya member yang di-assign yang bisa menambah sub-task
@@ -68,37 +58,272 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
     return _isAssignedToCurrentUser || widget.canManageTasks;
   }
 
-  void _addSubTask() {
-    final title = _subTaskController.text.trim();
-    if (title.isEmpty) return;
-
-    setState(() {
-      _subTasks.add(SubTask(
-        id: DateTime.now().millisecondsSinceEpoch,
-        title: title,
-        isCompleted: false,
-      ));
-      _subTaskController.clear();
-    });
+  String? get _parentTaskId {
+    final taskId = widget.task.sourceTaskId?.trim();
+    if (taskId == null || taskId.isEmpty) {
+      return null;
+    }
+    return taskId;
   }
 
-  void _toggleSubTask(int id) {
-    setState(() {
-      final index = _subTasks.indexWhere((st) => st.id == id);
-      if (index != -1) {
-        _subTasks[index] = SubTask(
-          id: _subTasks[index].id,
-          title: _subTasks[index].title,
-          isCompleted: !_subTasks[index].isCompleted,
-        );
+  String? get _currentMemberId {
+    for (final assignee in widget.task.assignees) {
+      if (assignee.isCurrentUser && assignee.memberId.trim().isNotEmpty) {
+        return assignee.memberId.trim();
       }
+    }
+    return null;
+  }
+
+  String get _currentAssigneeName {
+    for (final assignee in widget.task.assignees) {
+      if (assignee.isCurrentUser && assignee.fullName.trim().isNotEmpty) {
+        return assignee.fullName.trim();
+      }
+    }
+
+    if (widget.task.assignee.trim().isNotEmpty) {
+      return widget.task.assignee.trim();
+    }
+
+    return 'Diri sendiri';
+  }
+
+  Future<void> _loadSubtasks() async {
+    final parentTaskId = _parentTaskId;
+    if (!_canViewSubTasks || parentTaskId == null) {
+      setState(() {
+        _subtasks = const [];
+        _isLoadingSubtasks = false;
+        _subtaskError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingSubtasks = true;
+      _subtaskError = null;
+    });
+
+    final result = await _subtaskRepository.fetchSubtasks(parentTaskId);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result.isFailure) {
+      setState(() {
+        _subtasks = const [];
+        _subtaskError = result.error!.message;
+        _isLoadingSubtasks = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _subtasks = result.data ?? const [];
+      _subtaskError = null;
+      _isLoadingSubtasks = false;
     });
   }
 
-  void _deleteSubTask(int id) {
+  Future<void> _addSubTask() async {
+    if (!_canAddSubTasks || _isSavingSubtask) {
+      return;
+    }
+
+    final parentTaskId = _parentTaskId;
+    if (parentTaskId == null) {
+      _showMessage('Task utama tidak valid.');
+      return;
+    }
+
+    final input = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => AddSubtaskDialog(
+        assignedToName: _currentAssigneeName,
+      ),
+    );
+
+    if (input == null || !mounted) {
+      return;
+    }
+
     setState(() {
-      _subTasks.removeWhere((st) => st.id == id);
+      _isSavingSubtask = true;
     });
+
+    final result = await _subtaskRepository.createSubtask(
+      parentTaskId: parentTaskId,
+      title: input['title'] ?? '',
+      description: input['description'] ?? '',
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSavingSubtask = false;
+    });
+
+    if (result.isFailure) {
+      _showMessage(result.error!.message);
+      return;
+    }
+
+    setState(() {
+      _subtasks = [..._subtasks, result.data!];
+    });
+  }
+
+  Future<void> _toggleSubtaskStatus(SubtaskModel subtask) async {
+    if (!_canEditSubtask(subtask) || _isSavingSubtask) {
+      return;
+    }
+
+    final nextStatus = subtask.status == 'done' ? 'todo' : 'done';
+    await _updateSubtask(
+      subtaskId: subtask.id,
+      status: nextStatus,
+    );
+  }
+
+  Future<void> _editSubtask(SubtaskModel subtask) async {
+    if (!_canEditSubtask(subtask) || _isSavingSubtask) {
+      return;
+    }
+
+    final input = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => AddSubtaskDialog(
+        initialTitle: subtask.title,
+        initialDescription: subtask.description,
+        assignedToName: subtask.assignedToName,
+        isEdit: true,
+      ),
+    );
+
+    if (input == null || !mounted) {
+      return;
+    }
+
+    await _updateSubtask(
+      subtaskId: subtask.id,
+      title: input['title'] ?? '',
+      description: input['description'] ?? '',
+    );
+  }
+
+  Future<void> _updateSubtask({
+    required String subtaskId,
+    String? title,
+    String? description,
+    String? status,
+  }) async {
+    setState(() {
+      _isSavingSubtask = true;
+    });
+
+    final result = await _subtaskRepository.updateSubtask(
+      subtaskId: subtaskId,
+      title: title,
+      description: description,
+      status: status,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSavingSubtask = false;
+    });
+
+    if (result.isFailure) {
+      _showMessage(result.error!.message);
+      return;
+    }
+
+    final updatedSubtask = result.data!;
+    setState(() {
+      _subtasks = _subtasks
+          .map((item) => item.id == updatedSubtask.id ? updatedSubtask : item)
+          .toList();
+    });
+  }
+
+  Future<void> _deleteSubtask(SubtaskModel subtask) async {
+    if (!_canEditSubtask(subtask) || _isSavingSubtask) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Sub-task?'),
+        content: Text('Sub-task "${subtask.title}" akan dihapus.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSavingSubtask = true;
+    });
+
+    final result = await _subtaskRepository.deleteSubtask(subtask.id);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSavingSubtask = false;
+    });
+
+    if (result.isFailure) {
+      _showMessage(result.error!.message);
+      return;
+    }
+
+    setState(() {
+      _subtasks = _subtasks.where((item) => item.id != subtask.id).toList();
+    });
+  }
+
+  bool _canEditSubtask(SubtaskModel subtask) {
+    if (!_isAssignedToCurrentUser) {
+      return false;
+    }
+
+    final currentMemberId = _currentMemberId;
+    if (currentMemberId != null &&
+        currentMemberId.isNotEmpty &&
+        currentMemberId == subtask.assignedMemberId) {
+      return true;
+    }
+
+    final currentEmail = widget.currentUserEmail?.trim().toLowerCase();
+    return currentEmail != null &&
+        currentEmail.isNotEmpty &&
+        currentEmail == subtask.assignedToEmail.trim().toLowerCase();
   }
 
   @override
@@ -142,7 +367,8 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
                       ),
                       if (widget.onEdit != null)
                         IconButton(
-                          icon: Icon(Icons.edit_outlined, color: Colors.grey.shade600),
+                          icon: Icon(Icons.edit_outlined,
+                              color: Colors.grey.shade600),
                           onPressed: () {
                             Navigator.pop(context);
                             widget.onEdit!();
@@ -151,7 +377,8 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
                         ),
                       if (widget.onDelete != null)
                         IconButton(
-                          icon: Icon(Icons.delete_outline, color: Colors.grey.shade600),
+                          icon: Icon(Icons.delete_outline,
+                              color: Colors.grey.shade600),
                           onPressed: () {
                             Navigator.pop(context);
                             widget.onDelete!();
@@ -237,281 +464,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
         ),
         const SizedBox(height: 24),
 
-        // Sub-tasks Section
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.checklist_outlined,
-                    size: 18, color: Colors.grey.shade700),
-                const SizedBox(width: 8),
-                Text(
-                  'Sub-tasks',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade900,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (_subTasks.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${_subTasks.where((st) => st.isCompleted).length}/${_subTasks.length}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF6C5CE7),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        // Info box untuk member
-        if (_isAssignedToCurrentUser)
-          Container(
-            padding: const EdgeInsets.all(12),
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0F9FF),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFBAE6FD)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Sub-task adalah to-do list pribadi Anda. Otomatis ter-assign ke Anda dan tidak menambah beban jam kerja organisasi.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue.shade900,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        
-        // Sub-task list
-        if (_subTasks.isNotEmpty)
-          ..._subTasks.map((subTask) {
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: subTask.isCompleted
-                    ? Colors.green.shade50
-                    : Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: subTask.isCompleted
-                      ? Colors.green.shade200
-                      : Colors.grey.shade200,
-                ),
-              ),
-              child: Row(
-                children: [
-                  InkWell(
-                    onTap: _isAssignedToCurrentUser
-                        ? () => _toggleSubTask(subTask.id)
-                        : null,
-                    child: Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: subTask.isCompleted
-                            ? Colors.green.shade600
-                            : Colors.white,
-                        border: Border.all(
-                          color: subTask.isCompleted
-                              ? Colors.green.shade600
-                              : Colors.grey.shade400,
-                          width: 2,
-                        ),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: subTask.isCompleted
-                          ? const Icon(Icons.check,
-                              size: 14, color: Colors.white)
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          subTask.title,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: subTask.isCompleted
-                                ? Colors.grey.shade600
-                                : Colors.grey.shade900,
-                            decoration: subTask.isCompleted
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.person_outline,
-                                size: 11, color: Colors.grey.shade500),
-                            const SizedBox(width: 4),
-                            Text(
-                              widget.task.assignee.isNotEmpty
-                                  ? widget.task.assignee
-                                  : 'Unassigned',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_isAssignedToCurrentUser)
-                    IconButton(
-                      icon: Icon(Icons.close,
-                          size: 16, color: Colors.grey.shade600),
-                      onPressed: () => _deleteSubTask(subTask.id),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                ],
-              ),
-            );
-          }).toList(),
-        
-        // Add sub-task input (only for assigned member, NOT admin)
-        if (_isAssignedToCurrentUser) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.lock_outline, size: 14, color: Color(0xFF6C5CE7)),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Assigned to: ${widget.task.assignee}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF6C5CE7),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _subTaskController,
-                        decoration: InputDecoration(
-                          hintText: 'Tambah sub-task baru...',
-                          hintStyle: TextStyle(
-                            color: Colors.grey.shade400,
-                            fontSize: 14,
-                          ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                          isDense: true,
-                        ),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF1F2937),
-                        ),
-                        onSubmitted: (_) => _addSubTask(),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Material(
-                      color: const Color(0xFF6C5CE7),
-                      borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
-                        onTap: _addSubTask,
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(
-                            Icons.add,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-        
-        // Message for non-assigned users
-        if (!_isAssignedToCurrentUser && _subTasks.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    widget.canManageTasks
-                        ? 'Belum ada sub-task. Hanya member yang di-assign yang bisa menambah sub-task.'
-                        : 'Belum ada sub-task untuk tugas ini.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        
+        _buildSubtaskArea(),
         const SizedBox(height: 24),
 
         // Dependencies
@@ -594,7 +547,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
                 ],
               ),
             );
-          }).toList()
+          })
         else
           Text(
             'Tidak ada dependencies',
@@ -603,6 +556,84 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
               color: Colors.grey.shade500,
             ),
           ),
+      ],
+    );
+  }
+
+  Widget _buildSubtaskArea() {
+    if (!_canViewSubTasks) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_isAssignedToCurrentUser)
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F9FF),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFBAE6FD)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Sub-task adalah to-do list pribadi Anda. Otomatis ter-assign ke Anda dan tidak menambah beban jam kerja organisasi.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue.shade900,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (_subtaskError != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.shade100),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, size: 16, color: Colors.red.shade600),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _subtaskError!,
+                    style: TextStyle(fontSize: 13, color: Colors.red.shade700),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _isLoadingSubtasks ? null : _loadSubtasks,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        SubtaskSection(
+          subtasks: _subtasks,
+          isLoading: _isLoadingSubtasks,
+          currentUserEmail: widget.currentUserEmail,
+          currentMemberId: _currentMemberId,
+          canAddSubtask:
+              _canAddSubTasks && !_isSavingSubtask && _parentTaskId != null,
+          canEditSubtasks: _isAssignedToCurrentUser && !_isSavingSubtask,
+          onAddSubtask: _addSubTask,
+          onToggleStatus: _toggleSubtaskStatus,
+          onEdit: _editSubtask,
+          onDelete: _deleteSubtask,
+        ),
       ],
     );
   }
@@ -672,7 +703,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF6C5CE7).withOpacity(0.3),
+                    color: const Color(0xFF6C5CE7).withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -714,8 +745,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
         const SizedBox(height: 8),
         Row(
           children: [
-            Icon(Icons.access_time,
-                size: 16, color: Colors.grey.shade600),
+            Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
             const SizedBox(width: 6),
             Text(
               '${widget.task.estimatedHours.toInt()} jam',
@@ -767,8 +797,7 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
         const SizedBox(height: 12),
         Row(
           children: [
-            Icon(Icons.event_outlined,
-                size: 16, color: Colors.grey.shade400),
+            Icon(Icons.event_outlined, size: 16, color: Colors.grey.shade400),
             const SizedBox(width: 6),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -844,10 +873,30 @@ class _TaskDetailDialogState extends State<TaskDetailDialog> {
 
   String _formatDate(DateTime date) {
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des'
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   Widget _buildStatusBadge() {

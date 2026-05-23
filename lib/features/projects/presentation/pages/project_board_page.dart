@@ -52,6 +52,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
   bool _didLoadAssignableMembers = false;
   String? _assignableMembersError;
   String? _projectWorkloadError;
+  String? _currentUserEmail;
 
   final List<KanbanColumn> _columns = [
     KanbanColumn(
@@ -120,6 +121,15 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
       canManageTasks = _canManageTasks;
     }
 
+    String? currentUserEmail = _currentUserEmail;
+    try {
+      final context = await sessionService.getCurrentContext();
+      currentUserEmail =
+          context?.profile?.email ?? supabase.auth.currentUser?.email;
+    } catch (_) {
+      currentUserEmail = supabase.auth.currentUser?.email;
+    }
+
     if (!mounted) {
       return false;
     }
@@ -127,6 +137,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
     if (result.isFailure) {
       setState(() {
         _canManageTasks = canManageTasks;
+        _currentUserEmail = currentUserEmail;
         _isLoadingTasks = false;
         _isLoadingProjectWorkloads = false;
       });
@@ -156,6 +167,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
     setState(() {
       _tasks = mappedTasks;
       _canManageTasks = canManageTasks;
+      _currentUserEmail = currentUserEmail;
       _isLoadingTasks = false;
     });
 
@@ -626,6 +638,7 @@ class _ProjectBoardPageState extends State<ProjectBoardPage>
           isLoadingAssignableMembers: _isLoadingAssignableMembers,
           assignableMembersError: _assignableMembersError,
           assignTaskPresenter: _assignTaskPresenter,
+          currentUserEmail: _currentUserEmail,
           onMoveTask: _moveTask,
           onAddTask: _showAddTaskDialog,
           onEditTask: _showEditTaskDialog,

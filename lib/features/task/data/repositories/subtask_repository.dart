@@ -1,5 +1,6 @@
 import '../../../../core/errors/app_error.dart';
-import '../../../../core/utils/result.dart';
+import '../../../../core/errors/error_mapper.dart';
+import '../../../../core/result/result.dart';
 import '../../domain/models/subtask_model.dart';
 import '../datasources/subtask_remote_datasource.dart';
 
@@ -11,10 +12,19 @@ class SubtaskRepository {
 
   Future<Result<List<SubtaskModel>>> fetchSubtasks(String parentTaskId) async {
     try {
-      final subtasks = await _remoteDatasource.fetchSubtasks(parentTaskId);
+      final normalizedParentTaskId = parentTaskId.trim();
+      if (normalizedParentTaskId.isEmpty) {
+        return Result<List<SubtaskModel>>.failure(
+          const AppError('Task utama tidak valid.'),
+        );
+      }
+
+      final subtasks = await _remoteDatasource.fetchSubtasks(
+        normalizedParentTaskId,
+      );
       return Result.success(subtasks);
     } catch (error) {
-      return Result.failure(AppError.fromException(error));
+      return Result.failure(ErrorMapper.map(error));
     }
   }
 
@@ -22,22 +32,30 @@ class SubtaskRepository {
     required String parentTaskId,
     required String title,
     required String description,
-    required String assignedToEmail,
-    required String assignedToName,
-    required String createdBy,
   }) async {
     try {
+      final normalizedParentTaskId = parentTaskId.trim();
+      if (normalizedParentTaskId.isEmpty) {
+        return Result<SubtaskModel>.failure(
+          const AppError('Task utama tidak valid.'),
+        );
+      }
+
+      final normalizedTitle = title.trim();
+      if (normalizedTitle.isEmpty) {
+        return Result<SubtaskModel>.failure(
+          const AppError('Judul sub-task tidak boleh kosong.'),
+        );
+      }
+
       final subtask = await _remoteDatasource.createSubtask(
-        parentTaskId: parentTaskId,
-        title: title,
-        description: description,
-        assignedToEmail: assignedToEmail,
-        assignedToName: assignedToName,
-        createdBy: createdBy,
+        parentTaskId: normalizedParentTaskId,
+        title: normalizedTitle,
+        description: description.trim(),
       );
       return Result.success(subtask);
     } catch (error) {
-      return Result.failure(AppError.fromException(error));
+      return Result.failure(ErrorMapper.map(error));
     }
   }
 
@@ -48,24 +66,38 @@ class SubtaskRepository {
     String? status,
   }) async {
     try {
+      final normalizedSubtaskId = subtaskId.trim();
+      if (normalizedSubtaskId.isEmpty) {
+        return Result<SubtaskModel>.failure(
+          const AppError('Sub-task tidak valid.'),
+        );
+      }
+
       final subtask = await _remoteDatasource.updateSubtask(
-        subtaskId: subtaskId,
-        title: title,
-        description: description,
-        status: status,
+        subtaskId: normalizedSubtaskId,
+        title: title?.trim(),
+        description: description?.trim(),
+        status: status?.trim(),
       );
       return Result.success(subtask);
     } catch (error) {
-      return Result.failure(AppError.fromException(error));
+      return Result.failure(ErrorMapper.map(error));
     }
   }
 
   Future<Result<void>> deleteSubtask(String subtaskId) async {
     try {
-      await _remoteDatasource.deleteSubtask(subtaskId);
+      final normalizedSubtaskId = subtaskId.trim();
+      if (normalizedSubtaskId.isEmpty) {
+        return Result<void>.failure(
+          const AppError('Sub-task tidak valid.'),
+        );
+      }
+
+      await _remoteDatasource.deleteSubtask(normalizedSubtaskId);
       return Result.success(null);
     } catch (error) {
-      return Result.failure(AppError.fromException(error));
+      return Result.failure(ErrorMapper.map(error));
     }
   }
 }

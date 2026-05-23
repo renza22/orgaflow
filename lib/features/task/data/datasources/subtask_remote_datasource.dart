@@ -10,36 +10,31 @@ class SubtaskRemoteDatasource {
   final SupabaseClient _client;
 
   Future<List<SubtaskModel>> fetchSubtasks(String parentTaskId) async {
-    final response = await _client
-        .from('subtasks')
-        .select()
-        .eq('parent_task_id', parentTaskId)
-        .order('created_at', ascending: true);
+    final response = await _client.rpc(
+      'get_task_subtasks',
+      params: {
+        'p_parent_task_id': parentTaskId,
+      },
+    );
 
-    return (response as List)
-        .map((json) => SubtaskModel.fromJson(json as Map<String, dynamic>))
-        .toList();
+    return _extractRows(response).map(SubtaskModel.fromJson).toList();
   }
 
   Future<SubtaskModel> createSubtask({
     required String parentTaskId,
     required String title,
     required String description,
-    required String assignedToEmail,
-    required String assignedToName,
-    required String createdBy,
   }) async {
-    final response = await _client.from('subtasks').insert({
-      'parent_task_id': parentTaskId,
-      'title': title,
-      'description': description,
-      'assigned_to_email': assignedToEmail,
-      'assigned_to_name': assignedToName,
-      'status': 'todo',
-      'created_by': createdBy,
-    }).select().single();
+    final response = await _client.rpc(
+      'create_my_subtask',
+      params: {
+        'p_parent_task_id': parentTaskId,
+        'p_title': title,
+        'p_description': description,
+      },
+    );
 
-    return SubtaskModel.fromJson(response as Map<String, dynamic>);
+    return SubtaskModel.fromJson(_extractRequiredSingleRow(response));
   }
 
   Future<SubtaskModel> updateSubtask({
@@ -48,30 +43,75 @@ class SubtaskRemoteDatasource {
     String? description,
     String? status,
   }) async {
-    final updateData = <String, dynamic>{
-      'updated_at': DateTime.now().toIso8601String(),
-    };
+    final response = await _client.rpc(
+      'update_my_subtask',
+      params: {
+        'p_subtask_id': subtaskId,
+        'p_title': title,
+        'p_description': description,
+        'p_status': status,
+      },
+    );
 
-    if (title != null) updateData['title'] = title;
-    if (description != null) updateData['description'] = description;
-    if (status != null) {
-      updateData['status'] = status;
-      if (status == 'done') {
-        updateData['completed_at'] = DateTime.now().toIso8601String();
-      }
-    }
-
-    final response = await _client
-        .from('subtasks')
-        .update(updateData)
-        .eq('id', subtaskId)
-        .select()
-        .single();
-
-    return SubtaskModel.fromJson(response as Map<String, dynamic>);
+    return SubtaskModel.fromJson(_extractRequiredSingleRow(response));
   }
 
   Future<void> deleteSubtask(String subtaskId) async {
-    await _client.from('subtasks').delete().eq('id', subtaskId);
+    await _client.rpc(
+      'delete_my_subtask',
+      params: {
+        'p_subtask_id': subtaskId,
+      },
+    );
+  }
+
+  Map<String, dynamic> _extractRequiredSingleRow(dynamic response) {
+    final row = _extractSingleRow(response);
+    if (row == null) {
+      throw const FormatException('RPC sub-task tidak mengembalikan data.');
+    }
+    return row;
+  }
+
+  Map<String, dynamic>? _extractSingleRow(dynamic response) {
+    if (response == null) {
+      return null;
+    }
+
+    if (response is Map<String, dynamic>) {
+      return response;
+    }
+
+    if (response is Map) {
+      return Map<String, dynamic>.from(response);
+    }
+
+    if (response is List && response.isNotEmpty) {
+      final first = response.first;
+      if (first is Map<String, dynamic>) {
+        return first;
+      }
+      if (first is Map) {
+        return Map<String, dynamic>.from(first);
+      }
+    }
+
+    return null;
+  }
+
+  List<Map<String, dynamic>> _extractRows(dynamic response) {
+    if (response == null) {
+      return const [];
+    }
+
+    if (response is List) {
+      return response
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+    }
+
+    final row = _extractSingleRow(response);
+    return row == null ? const [] : [row];
   }
 }
