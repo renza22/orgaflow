@@ -19,7 +19,8 @@ class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize => subtitle != null ? const Size.fromHeight(80) : const Size.fromHeight(70);
+  Size get preferredSize =>
+      subtitle != null ? const Size.fromHeight(80) : const Size.fromHeight(70);
 
   @override
   Widget build(BuildContext context) {
@@ -126,20 +127,9 @@ class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ],
 
-            // Global Command Bar (center on desktop, expandable on mobile)
+            // Global Command Bar (center on desktop)
             if (title == null || (!isSmallScreen && !isMediumScreen)) ...[
-              if (isSmallScreen)
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  onPressed: () {
-                    showSearch(
-                      context: context,
-                      delegate: _GlobalSearchDelegate(),
-                    );
-                  },
-                  color: Colors.grey.shade700,
-                )
-              else
+              if (!isSmallScreen)
                 const Expanded(
                   child: Center(
                     child: GlobalCommandBar(),
@@ -147,9 +137,10 @@ class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
             ],
 
+            if (isSmallScreen) Spacer(),
             const SizedBox(width: 16),
 
-            // Dark mode toggle
+            // Dark mode toggle (desktop/tablet)
             if (!isSmallScreen)
               IconButton(
                 icon: const Icon(Icons.dark_mode_outlined),
@@ -161,6 +152,21 @@ class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
                 color: Colors.grey.shade700,
                 tooltip: 'Toggle dark mode',
               ),
+
+            // On small screens, place search button to the right next to notifications
+            if (isSmallScreen) ...[
+              IconButton(
+                icon: const Icon(Icons.search),
+                onPressed: () {
+                  showSearch(
+                    context: context,
+                    delegate: _GlobalSearchDelegate(),
+                  );
+                },
+                color: Colors.grey.shade700,
+              ),
+              const SizedBox(width: 8),
+            ],
 
             // Notification Center
             const NotificationCenter(),
@@ -208,7 +214,9 @@ class _GlobalSearchDelegate extends SearchDelegate {
       'API Documentation',
       'Website Redesign',
       'Kelola Anggota',
-    ].where((item) => item.toLowerCase().contains(query.toLowerCase())).toList();
+    ]
+        .where((item) => item.toLowerCase().contains(query.toLowerCase()))
+        .toList();
 
     return ListView.builder(
       itemCount: suggestions.length,

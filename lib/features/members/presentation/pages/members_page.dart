@@ -114,7 +114,10 @@ class _MembersPageState extends State<MembersPage> {
       ),
       drawer: (isSmallScreen || isMediumScreen)
           ? Drawer(
-              child: ResponsiveSidebar(currentRoute: '/members'),
+              child: ResponsiveSidebar(
+                currentRoute: '/members',
+                onClose: () => Navigator.of(context).pop(),
+              ),
             )
           : null,
       body: Row(

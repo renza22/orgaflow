@@ -8,10 +8,12 @@ import '../../features/notifications/widgets/overload_badge.dart';
 
 class ResponsiveSidebar extends StatefulWidget {
   final String currentRoute;
+  final VoidCallback? onClose;
 
   const ResponsiveSidebar({
     super.key,
     required this.currentRoute,
+    this.onClose,
   });
 
   @override
@@ -121,10 +123,13 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
 
   @override
   Widget build(BuildContext context) {
+    final isDrawerMode = widget.onClose != null;
+    final collapsed = isDrawerMode ? false : _isCollapsed;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
-      width: _isCollapsed ? 70 : 250,
+      width: collapsed ? 70 : 250,
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -144,21 +149,24 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Align(
-              alignment:
-                  _isCollapsed ? Alignment.center : Alignment.centerRight,
+              alignment: collapsed ? Alignment.center : Alignment.centerRight,
               child: IconButton(
                 icon: Icon(
-                  _isCollapsed ? Icons.menu : Icons.menu_open,
+                  isDrawerMode
+                      ? Icons.close
+                      : (collapsed ? Icons.menu : Icons.menu_open),
                   color: Colors.grey.shade700,
                 ),
-                onPressed: _toggleSidebar,
-                tooltip: _isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar',
+                onPressed: isDrawerMode ? widget.onClose : _toggleSidebar,
+                tooltip: isDrawerMode
+                    ? 'Close Sidebar'
+                    : (collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'),
               ),
             ),
           ),
 
           // Menu Utama Header
-          if (!_isCollapsed)
+          if (!collapsed)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Align(

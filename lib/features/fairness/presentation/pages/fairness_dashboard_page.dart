@@ -253,7 +253,10 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
       ),
       drawer: (isSmallScreen || isMediumScreen)
           ? Drawer(
-              child: ResponsiveSidebar(currentRoute: '/fairness'),
+              child: ResponsiveSidebar(
+                currentRoute: '/fairness',
+                onClose: () => Navigator.of(context).pop(),
+              ),
             )
           : null,
       body: Row(

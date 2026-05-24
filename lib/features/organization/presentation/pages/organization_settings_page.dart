@@ -504,7 +504,10 @@ class _OrganizationSettingsPageState extends State<OrganizationSettingsPage> {
       ),
       drawer: (isSmallScreen || isMediumScreen)
           ? Drawer(
-              child: ResponsiveSidebar(currentRoute: '/organization-settings'),
+              child: ResponsiveSidebar(
+                currentRoute: '/organization-settings',
+                onClose: () => Navigator.of(context).pop(),
+              ),
             )
           : null,
       body: Row(

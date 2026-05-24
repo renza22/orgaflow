@@ -174,25 +174,33 @@ class _WorkflowTabState extends State<WorkflowTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Dependency Graph',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1F2937),
+              Expanded(
+                child: Text(
+                  'Dependency Graph',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1F2937),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  _buildLegendDot(const Color(0xFF10B981), 'Done'),
-                  _buildLegendDot(const Color(0xFFFB923C), 'Blocked'),
-                  _buildLegendDot(const Color(0xFF7C3AED), 'In Progress'),
-                  _buildLegendDot(const Color(0xFF94A3B8), 'Backlog'),
-                ],
+              const SizedBox(width: 12),
+              Flexible(
+                fit: FlexFit.loose,
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    _buildLegendDot(const Color(0xFF10B981), 'Done'),
+                    _buildLegendDot(const Color(0xFFFB923C), 'Blocked'),
+                    _buildLegendDot(const Color(0xFF7C3AED), 'In Progress'),
+                    _buildLegendDot(const Color(0xFF94A3B8), 'Backlog'),
+                  ],
+                ),
               ),
             ],
           ),
@@ -287,12 +295,16 @@ class _WorkflowTabState extends State<WorkflowTab> {
             children: [
               Icon(icon, color: color, size: 20),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: color,
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const Spacer(),

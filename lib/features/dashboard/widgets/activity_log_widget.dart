@@ -137,21 +137,20 @@ class ActivityLogWidget extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        activity.message,
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 13 : 14,
-                          color: const Color(0xFF1F2937),
-                          height: 1.5,
-                        ),
+                    Text(
+                      activity.message,
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 13 : 14,
+                        color: const Color(0xFF1F2937),
+                        height: 1.5,
                       ),
                     ),
-                    if (activity.isSystemAction)
+                    if (activity.isSystemAction) ...[
+                      const SizedBox(height: 8),
                       Container(
-                        margin: const EdgeInsets.only(left: 8),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 4,
@@ -169,10 +168,14 @@ class ActivityLogWidget extends StatelessWidget {
                           ),
                         ),
                       ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 6),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Icon(
                       Icons.access_time,
@@ -187,8 +190,7 @@ class ActivityLogWidget extends StatelessWidget {
                         color: Colors.grey.shade600,
                       ),
                     ),
-                    if (activity.type == ActivityType.autoBalance) ...[
-                      const SizedBox(width: 12),
+                    if (activity.type == ActivityType.autoBalance)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -207,7 +209,6 @@ class ActivityLogWidget extends StatelessWidget {
                           ),
                         ),
                       ),
-                    ],
                   ],
                 ),
               ],

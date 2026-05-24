@@ -171,7 +171,10 @@ class _RebalanceWizardPageState extends State<RebalanceWizardPage> {
       ),
       drawer: (isSmallScreen || isMediumScreen)
           ? Drawer(
-              child: ResponsiveSidebar(currentRoute: '/fairness'),
+              child: ResponsiveSidebar(
+                currentRoute: '/fairness',
+                onClose: () => Navigator.of(context).pop(),
+              ),
             )
           : null,
       body: Row(

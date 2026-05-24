@@ -89,8 +89,14 @@ class _KanbanTabState extends State<KanbanTab> {
           ),
           child: Row(
             children: [
-              Text('Kanban board untuk manajemen task proyek',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+              Expanded(
+                child: Text(
+                  'Kanban board untuk manajemen task proyek',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               const Spacer(),
               if (!isSmallScreen && widget.canManageTasks)
                 ElevatedButton.icon(
@@ -167,11 +173,17 @@ class _KanbanTabState extends State<KanbanTab> {
                 decoration: BoxDecoration(
                     color: Color(column.color), shape: BoxShape.circle)),
             const SizedBox(width: 8),
-            Text(column.title.toUpperCase(),
+            Expanded(
+              child: Text(
+                column.title.toUpperCase(),
                 style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5)),
+                    letterSpacing: 0.5),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
