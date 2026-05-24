@@ -30,6 +30,24 @@ class ActivityLog {
     this.isSystemAction = false,
   });
 
+  factory ActivityLog.fromJson(Map<String, dynamic> json) {
+    return ActivityLog(
+      id: _readString(json['id']),
+      type: _parseActivityType(json['activity_type']),
+      message: _readString(
+        json['message'],
+        fallback: 'Aktivitas tercatat.',
+      ),
+      timestamp: _readDateTime(json['created_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      actorName: _readNullableString(json['actor_name']),
+      targetName: _readNullableString(json['target_name']),
+      projectName: _readNullableString(json['project_name']),
+      taskName: _readNullableString(json['task_name']),
+      isSystemAction: _readBool(json['is_system_action']),
+    );
+  }
+
   String get timeAgo {
     final now = DateTime.now();
     final difference = now.difference(timestamp);
@@ -45,6 +63,71 @@ class ActivityLog {
     } else {
       return '${(difference.inDays / 7).floor()} minggu yang lalu';
     }
+  }
+
+  static ActivityType _parseActivityType(dynamic value) {
+    final normalized = value
+        ?.toString()
+        .trim()
+        .replaceAll(RegExp(r'[_\-\s]+'), '')
+        .toLowerCase();
+
+    switch (normalized) {
+      case 'autobalance':
+        return ActivityType.autoBalance;
+      case 'taskcreated':
+        return ActivityType.taskCreated;
+      case 'taskcompleted':
+        return ActivityType.taskCompleted;
+      case 'taskassigned':
+        return ActivityType.taskAssigned;
+      case 'subtaskadded':
+        return ActivityType.subTaskAdded;
+      case 'taskreassigned':
+        return ActivityType.taskReassigned;
+      default:
+        return ActivityType.taskCreated;
+    }
+  }
+
+  static String _readString(dynamic value, {String fallback = ''}) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) {
+      return fallback;
+    }
+    return text;
+  }
+
+  static String? _readNullableString(dynamic value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) {
+      return null;
+    }
+    return text;
+  }
+
+  static bool _readBool(dynamic value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+
+    final text = value?.toString().trim().toLowerCase();
+    return text == 'true' || text == '1' || text == 'yes';
+  }
+
+  static DateTime? _readDateTime(dynamic value) {
+    if (value is DateTime) {
+      return value;
+    }
+
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(text);
   }
 
   // Mock data for demonstration

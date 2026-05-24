@@ -1,5 +1,6 @@
 import '../../../../core/result/result.dart';
 import '../../data/repositories/fairness_repository.dart';
+import '../../domain/models/burnout_alert_model.dart';
 import '../../domain/models/fairness_summary_model.dart';
 import '../../domain/models/fairness_trend_model.dart';
 import '../../domain/models/member_fairness_breakdown_model.dart';
@@ -46,6 +47,14 @@ class FairnessPresenter {
     return _repository.refreshOrganizationFairnessScores(
       organizationId: organizationId,
       scoreDate: scoreDate,
+    );
+  }
+
+  Future<Result<List<BurnoutAlertModel>>> getCriticalBurnoutAlerts({
+    required String organizationId,
+  }) {
+    return _repository.getCriticalBurnoutAlerts(
+      organizationId: organizationId,
     );
   }
 

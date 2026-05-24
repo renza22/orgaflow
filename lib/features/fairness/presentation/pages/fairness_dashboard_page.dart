@@ -9,6 +9,7 @@ import '../../../../core/session/session_service.dart';
 import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
 import '../../../organization/domain/models/member_model.dart';
+import '../../domain/models/burnout_alert_model.dart';
 import '../../domain/models/fairness_summary_model.dart';
 import '../../domain/models/fairness_trend_model.dart';
 import '../../domain/models/member_fairness_breakdown_model.dart';
@@ -28,8 +29,10 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
   FairnessSummaryModel? _summary;
   List<MemberFairnessBreakdownModel> _memberBreakdown = const [];
   List<FairnessTrendModel> _fairnessTrend = const [];
+  List<BurnoutAlertModel> _criticalBurnoutAlerts = const [];
   String? _organizationId;
   String? _errorMessage;
+  String? _burnoutAlertsError;
   bool _isLoading = true;
   bool _isRefreshingSnapshot = false;
   bool _canUseRebalance = false;
@@ -45,6 +48,7 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
       setState(() {
         _isLoading = true;
         _errorMessage = null;
+        _burnoutAlertsError = null;
       });
     }
 
@@ -66,8 +70,10 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
           _summary = null;
           _memberBreakdown = const [];
           _fairnessTrend = const [];
+          _criticalBurnoutAlerts = const [];
           _canUseRebalance = false;
           _errorMessage = 'User belum memiliki organisasi aktif.';
+          _burnoutAlertsError = null;
           _isLoading = false;
         });
         return;
@@ -75,7 +81,7 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
 
       _organizationId = organizationId;
 
-      final results = await Future.wait<dynamic>([
+      final requests = <Future<dynamic>>[
         _presenter.fetchOrganizationFairnessSummary(
           organizationId: organizationId,
         ),
@@ -86,7 +92,17 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
           organizationId: organizationId,
           limit: 12,
         ),
-      ]);
+      ];
+
+      if (canUseRebalance) {
+        requests.add(
+          _presenter.getCriticalBurnoutAlerts(
+            organizationId: organizationId,
+          ),
+        );
+      }
+
+      final results = await Future.wait<dynamic>(requests);
 
       if (!mounted) {
         return;
@@ -96,6 +112,9 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
       final breakdownResult =
           results[1] as Result<List<MemberFairnessBreakdownModel>>;
       final trendResult = results[2] as Result<List<FairnessTrendModel>>;
+      final burnoutAlertsResult = canUseRebalance && results.length > 3
+          ? results[3] as Result<List<BurnoutAlertModel>>
+          : null;
 
       final errorMessage = summaryResult.error?.message ??
           breakdownResult.error?.message ??
@@ -106,8 +125,10 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
           _summary = null;
           _memberBreakdown = const [];
           _fairnessTrend = const [];
+          _criticalBurnoutAlerts = const [];
           _canUseRebalance = canUseRebalance;
           _errorMessage = errorMessage;
+          _burnoutAlertsError = burnoutAlertsResult?.error?.message;
           _isLoading = false;
         });
         return;
@@ -117,8 +138,11 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
         _summary = summaryResult.data;
         _memberBreakdown = breakdownResult.data ?? const [];
         _fairnessTrend = trendResult.data ?? const [];
+        _criticalBurnoutAlerts =
+            burnoutAlertsResult?.data ?? const <BurnoutAlertModel>[];
         _canUseRebalance = canUseRebalance;
         _errorMessage = null;
+        _burnoutAlertsError = burnoutAlertsResult?.error?.message;
         _isLoading = false;
       });
     } catch (error) {
@@ -130,8 +154,10 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
         _summary = null;
         _memberBreakdown = const [];
         _fairnessTrend = const [];
+        _criticalBurnoutAlerts = const [];
         _canUseRebalance = canUseRebalance;
         _errorMessage = ErrorMapper.map(error).message;
+        _burnoutAlertsError = null;
         _isLoading = false;
       });
     }
@@ -372,6 +398,12 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
         const SizedBox(height: 24),
         _buildCharts(isSmallScreen),
         const SizedBox(height: 24),
+        if (_canUseRebalance &&
+            (_criticalBurnoutAlerts.isNotEmpty ||
+                _burnoutAlertsError != null)) ...[
+          _buildCriticalBurnoutAlerts(),
+          const SizedBox(height: 24),
+        ],
         _buildAttentionList(),
         const SizedBox(height: 24),
         _buildFairnessScores(),
@@ -834,6 +866,164 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
         message,
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+      ),
+    );
+  }
+
+  Widget _buildCriticalBurnoutAlerts() {
+    final errorMessage = _burnoutAlertsError;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF7675).withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFFF7675).withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Critical Burnout Alert',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFFF7675),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Anggota yang berada di zona merah berturut-turut sesuai batas organisasi',
+            style: TextStyle(
+              fontSize: 13,
+              color: const Color(0xFFFF7675).withValues(alpha: 0.8),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (errorMessage != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 18,
+                    color: Colors.red.shade600,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      errorMessage,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ..._criticalBurnoutAlerts.map(_buildCriticalBurnoutAlertCard),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCriticalBurnoutAlertCard(BurnoutAlertModel alert) {
+    const color = Color(0xFFFF7675);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.local_fire_department_outlined,
+              color: color,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  alert.fullName,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 6,
+                  children: [
+                    _buildMemberMeta(
+                      Icons.speed,
+                      '${_formatPercentage(alert.loadPercentage)}% load',
+                    ),
+                    _buildMemberMeta(
+                      Icons.event_repeat,
+                      '${alert.streakDays}/${alert.thresholdDays} hari merah',
+                    ),
+                    _buildMemberMeta(
+                      Icons.schedule,
+                      '${_formatHours(alert.assignedHours)} / '
+                      '${_formatHours(alert.weeklyCapacityHours)} jam',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          _buildCriticalStatusChip(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCriticalStatusChip() {
+    const color = Color(0xFFFF7675);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: const Text(
+        'Critical Burnout Alert',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
       ),
     );
   }

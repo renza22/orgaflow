@@ -24,7 +24,7 @@ class ActivityLogWidget extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -105,9 +105,7 @@ class ActivityLogWidget extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
       decoration: BoxDecoration(
-        color: activity.isSystemAction
-            ? const Color(0xFFF3F4F6)
-            : Colors.white,
+        color: activity.isSystemAction ? const Color(0xFFF3F4F6) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: activity.isSystemAction
@@ -123,7 +121,7 @@ class ActivityLogWidget extends StatelessWidget {
             width: isSmallScreen ? 36 : 40,
             height: isSmallScreen ? 36 : 40,
             decoration: BoxDecoration(
-              color: _getActivityColor(activity.type).withOpacity(0.1),
+              color: _getActivityColor(activity.type).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
@@ -159,7 +157,7 @@ class ActivityLogWidget extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF6C5CE7).withOpacity(0.1),
+                          color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -197,7 +195,7 @@ class ActivityLogWidget extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF00CEC9).withOpacity(0.1),
+                          color: const Color(0xFF00CEC9).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(

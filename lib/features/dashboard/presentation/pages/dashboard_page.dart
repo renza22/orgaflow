@@ -12,6 +12,7 @@ import '../../../../core/utils/message_helper.dart';
 import '../../../project/presentation/presenters/projects_presenter.dart';
 import '../../models/project_model.dart';
 import '../../models/activity_log_model.dart';
+import '../presenters/activity_log_presenter.dart';
 import '../../widgets/activity_log_widget.dart';
 import '../../widgets/circular_gradient_progress.dart';
 import '../../../organization/data/repositories/organization_repository.dart';
@@ -39,6 +40,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
   final OrganizationRepository _organizationRepository =
       OrganizationRepository();
   final ProjectsPresenter _projectsPresenter = ProjectsPresenter();
+  final ActivityLogPresenter _activityLogPresenter = ActivityLogPresenter();
   final ImagePicker _imagePicker = ImagePicker();
   SessionContext? _sessionContext;
   ModalRoute<dynamic>? _route;
@@ -49,7 +51,9 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
   bool _canManageProjects = false;
   int? _organizationLogoVersion;
   String? _projectErrorMessage;
+  String? _activityLogErrorMessage;
   List<ActivityLog> _activityLogs = [];
+  bool _isLoadingActivityLogs = false;
 
   @override
   void initState() {
@@ -57,15 +61,8 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     _updateTime();
     unawaited(_loadSessionContext());
     unawaited(_loadProjects());
-    _loadActivityLogs();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _updateTime();
-    });
-  }
-
-  void _loadActivityLogs() {
-    setState(() {
-      _activityLogs = ActivityLog.getMockData();
     });
   }
 
@@ -89,6 +86,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
   @override
   void didPopNext() {
     unawaited(_loadProjects());
+    unawaited(_loadActivityLogs());
   }
 
   @override
@@ -129,6 +127,8 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       setState(() {
         _sessionContext = contextData;
       });
+
+      unawaited(_loadActivityLogs(contextData: contextData));
     } catch (error) {
       if (!mounted) {
         return;
@@ -145,6 +145,71 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
         });
       }
     }
+  }
+
+  Future<void> _loadActivityLogs({
+    SessionContext? contextData,
+  }) async {
+    if (_isLoadingActivityLogs) {
+      return;
+    }
+
+    final contextForLogs = contextData ?? _sessionContext;
+    final organizationId =
+        contextForLogs?.organization?.id.trim().isNotEmpty == true
+            ? contextForLogs!.organization!.id.trim()
+            : contextForLogs?.activeMember?.organizationId.trim();
+
+    if (organizationId == null || organizationId.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _activityLogs = const [];
+        _activityLogErrorMessage = null;
+        _isLoadingActivityLogs = false;
+      });
+      return;
+    }
+
+    final previousLogs = List<ActivityLog>.from(_activityLogs);
+
+    setState(() {
+      _isLoadingActivityLogs = true;
+      if (previousLogs.isEmpty) {
+        _activityLogErrorMessage = null;
+      }
+    });
+
+    final result = await _activityLogPresenter.fetchActivityLogs(
+      organizationId: organizationId,
+      limit: 20,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result.isFailure) {
+      setState(() {
+        _activityLogs = previousLogs;
+        _activityLogErrorMessage =
+            previousLogs.isEmpty ? result.error!.message : null;
+        _isLoadingActivityLogs = false;
+      });
+
+      if (previousLogs.isNotEmpty) {
+        MessageHelper.showSnackBar(context, result.error!.message);
+      }
+      return;
+    }
+
+    setState(() {
+      _activityLogs = result.data ?? const [];
+      _activityLogErrorMessage = null;
+      _isLoadingActivityLogs = false;
+    });
   }
 
   bool get _canEditOrganizationLogo {
@@ -448,7 +513,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
 
                     // Overload Notification Banner
                     _buildOverloadNotification(),
-                    
+
                     // Summary Cards
                     _buildSummaryCards(isSmallScreen),
                     const SizedBox(height: 40),
@@ -463,8 +528,11 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
 
                     // Activity Log
                     ActivityLogWidget(
-                      activities: _activityLogs,
-                      isLive: true,
+                      activities: _activityLogErrorMessage != null &&
+                              _activityLogs.isEmpty
+                          ? const []
+                          : _activityLogs,
+                      isLive: !_isLoadingActivityLogs,
                     ),
                   ],
                 ),
@@ -641,13 +709,13 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     // Calculate load percentage
     final capacityMax = activeMember.weeklyCapacityHours;
     final capacityUsed = activeMember.capacityUsedHours;
-    
+
     if (capacityMax <= 0) {
       return const SizedBox.shrink();
     }
 
     final loadPercentage = (capacityUsed / capacityMax) * 100;
-    
+
     // Only show if overload (>= 100%)
     if (loadPercentage < 100) {
       return const SizedBox.shrink();
