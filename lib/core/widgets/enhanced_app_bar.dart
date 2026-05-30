@@ -73,19 +73,19 @@ class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
             // Logo OrgaFlow (only on desktop, left of search bar)
             if (!isSmallScreen && !isMediumScreen) ...[
               Container(
-                width: 36,
-                height: 36,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                   child: Image.asset(
                     'assets/images/logo.png',
-                    fit: BoxFit.cover,
+                    fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) => Container(
                       color: const Color(0xFF6C5CE7),
-                      child: const Icon(Icons.apps, color: Colors.white, size: 20),
+                      child: const Icon(Icons.apps, color: Colors.white, size: 24),
                     ),
                   ),
                 ),

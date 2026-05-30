@@ -479,10 +479,10 @@ class _RegisterPageState extends State<RegisterPage>
       children: [
         GestureDetector(
           child: Container(
-            width: 80,
-            height: 80,
+            width: 120,
+            height: 120,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
                   color: purpleColor.withOpacity(0.2),
@@ -492,10 +492,10 @@ class _RegisterPageState extends State<RegisterPage>
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(24),
               child: Image.asset(
                 'assets/images/logo.png',
-                fit: BoxFit.cover,
+                fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) => Container(
                   color: purpleColor.withOpacity(0.1),
                   child: const Icon(Icons.broken_image, color: purpleColor),
