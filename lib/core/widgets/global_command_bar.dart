@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/global_search_service.dart';
 
 class GlobalCommandBar extends StatefulWidget {
   const GlobalCommandBar({super.key});
@@ -123,32 +124,25 @@ class _SearchDialog extends StatefulWidget {
 class _SearchDialogState extends State<_SearchDialog> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _allData = [];
+  final GlobalSearchService _searchService = GlobalSearchService();
 
-  // Mock data
-  final List<Map<String, dynamic>> _allProjects = [
-    {'name': 'Inagurasi PKKMB UNESA 5 2026', 'type': 'project', 'icon': Icons.folder_outlined},
-    {'name': 'Seminar Nasional IT', 'type': 'project', 'icon': Icons.folder_outlined},
-    {'name': 'Kampanye Sosial Media', 'type': 'project', 'icon': Icons.folder_outlined},
-    {'name': 'Website Redesign', 'type': 'project', 'icon': Icons.folder_outlined},
-    {'name': 'Mobile App Launch', 'type': 'project', 'icon': Icons.folder_outlined},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
 
-  final List<Map<String, dynamic>> _allMembers = [
-    {'name': 'Sarah Chen', 'role': 'Lead Designer', 'type': 'member', 'icon': Icons.person_outline},
-    {'name': 'Mike Johnson', 'role': 'Senior Developer', 'type': 'member', 'icon': Icons.person_outline},
-    {'name': 'Emma Davis', 'role': 'Product Manager', 'type': 'member', 'icon': Icons.person_outline},
-    {'name': 'Alex Kim', 'role': 'DevOps Engineer', 'type': 'member', 'icon': Icons.person_outline},
-    {'name': 'Tom Wilson', 'role': 'QA Engineer', 'type': 'member', 'icon': Icons.person_outline},
-    {'name': 'Lisa Anderson', 'role': 'Marketing Lead', 'type': 'member', 'icon': Icons.person_outline},
-  ];
-
-  final List<Map<String, dynamic>> _allTasks = [
-    {'name': 'Desain Banner Utama', 'project': 'Inagurasi PKKMB', 'type': 'task', 'icon': Icons.task_outlined},
-    {'name': 'Persiapan Venue', 'project': 'Inagurasi PKKMB', 'type': 'task', 'icon': Icons.task_outlined},
-    {'name': 'Cetak Banner', 'project': 'Inagurasi PKKMB', 'type': 'task', 'icon': Icons.task_outlined},
-    {'name': 'API Documentation', 'project': 'Website Redesign', 'type': 'task', 'icon': Icons.task_outlined},
-    {'name': 'User Testing Session', 'project': 'Mobile App', 'type': 'task', 'icon': Icons.task_outlined},
-  ];
+  Future<void> _loadData() async {
+    final data = await _searchService.fetchAllSearchableData();
+    if (mounted) {
+      setState(() {
+        _allData = data;
+        _isLoading = false;
+      });
+    }
+  }
 
   List<Map<String, dynamic>> get _filteredResults {
     if (_searchQuery.isEmpty) {
@@ -156,26 +150,14 @@ class _SearchDialogState extends State<_SearchDialog> {
     }
 
     final query = _searchQuery.toLowerCase();
-    final results = <Map<String, dynamic>>[];
-
-    // Search projects
-    results.addAll(_allProjects.where((item) => 
-      item['name'].toString().toLowerCase().contains(query)
-    ));
-
-    // Search members
-    results.addAll(_allMembers.where((item) => 
-      item['name'].toString().toLowerCase().contains(query) ||
-      item['role'].toString().toLowerCase().contains(query)
-    ));
-
-    // Search tasks
-    results.addAll(_allTasks.where((item) => 
-      item['name'].toString().toLowerCase().contains(query) ||
-      item['project'].toString().toLowerCase().contains(query)
-    ));
-
-    return results;
+    
+    return _allData.where((item) {
+      final name = item['name']?.toString().toLowerCase() ?? '';
+      final role = item['role']?.toString().toLowerCase() ?? '';
+      final project = item['project']?.toString().toLowerCase() ?? '';
+      
+      return name.contains(query) || role.contains(query) || project.contains(query);
+    }).toList();
   }
 
   @override
@@ -319,6 +301,12 @@ class _SearchDialogState extends State<_SearchDialog> {
   }
 
   Widget _buildSearchResults() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
     final results = _filteredResults;
 
     if (results.isEmpty) {
@@ -379,9 +367,13 @@ class _SearchDialogState extends State<_SearchDialog> {
     return InkWell(
       onTap: () {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Opening $name')),
-        );
+        if (item['route'] != null) {
+          Navigator.pushNamed(context, item['route']);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Opening $name')),
+          );
+        }
       },
       borderRadius: BorderRadius.circular(8),
       child: Container(

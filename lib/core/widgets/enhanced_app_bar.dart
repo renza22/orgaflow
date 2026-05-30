@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/global_search_service.dart';
 import 'global_command_bar.dart';
 import 'notification_center.dart';
 
@@ -183,6 +184,13 @@ class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 class _GlobalSearchDelegate extends SearchDelegate {
+  final GlobalSearchService _searchService = GlobalSearchService();
+  Future<List<Map<String, dynamic>>>? _dataFuture;
+
+  _GlobalSearchDelegate() {
+    _dataFuture = _searchService.fetchAllSearchableData();
+  }
+
   @override
   List<Widget> buildActions(BuildContext context) {
     return [
@@ -207,31 +215,56 @@ class _GlobalSearchDelegate extends SearchDelegate {
 
   @override
   Widget buildResults(BuildContext context) {
-    return Center(
-      child: Text('Search results for: $query'),
-    );
+    return buildSuggestions(context);
   }
 
   @override
   Widget buildSuggestions(BuildContext context) {
-    final suggestions = [
-      'Sarah Chen',
-      'API Documentation',
-      'Website Redesign',
-      'Kelola Anggota',
-    ]
-        .where((item) => item.toLowerCase().contains(query.toLowerCase()))
-        .toList();
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _dataFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No results found'));
+        }
 
-    return ListView.builder(
-      itemCount: suggestions.length,
-      itemBuilder: (context, index) {
-        return ListTile(
-          leading: const Icon(Icons.search),
-          title: Text(suggestions[index]),
-          onTap: () {
-            query = suggestions[index];
-            showResults(context);
+        final allData = snapshot.data!;
+        final filteredData = allData.where((item) {
+          if (query.isEmpty) return true;
+          final name = item['name']?.toString().toLowerCase() ?? '';
+          final role = item['role']?.toString().toLowerCase() ?? '';
+          final project = item['project']?.toString().toLowerCase() ?? '';
+          return name.contains(query.toLowerCase()) || 
+                 role.contains(query.toLowerCase()) || 
+                 project.contains(query.toLowerCase());
+        }).toList();
+
+        if (filteredData.isEmpty && query.isNotEmpty) {
+           return const Center(child: Text('No matching results'));
+        }
+
+        return ListView.builder(
+          itemCount: filteredData.length,
+          itemBuilder: (context, index) {
+            final item = filteredData[index];
+            final type = item['type'] as String;
+            final icon = item['icon'] as IconData;
+            final name = item['name'] as String;
+
+            return ListTile(
+              leading: Icon(icon),
+              title: Text(name),
+              subtitle: Text(item['role'] ?? item['project'] ?? type),
+              onTap: () {
+                close(context, null);
+                if (item['route'] != null) {
+                  Navigator.pushNamed(context, item['route']);
+                }
+              },
+            );
           },
         );
       },
