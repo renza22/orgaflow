@@ -76,13 +76,18 @@ class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6C5CE7),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(
-                  Icons.apps,
-                  color: Colors.white,
-                  size: 20,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: const Color(0xFF6C5CE7),
+                      child: const Icon(Icons.apps, color: Colors.white, size: 20),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),

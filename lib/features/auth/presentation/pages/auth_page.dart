@@ -454,18 +454,28 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
           onTapDown: (_) => setState(() {}),
           onTapUp: (_) => setState(() {}),
           child: Container(
-            width: 64,
-            height: 64,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: const LinearGradient(
-                colors: [purpleColor, tealColor],
-              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: purpleColor.withOpacity(0.2),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
-            child: const Icon(
-              Icons.auto_awesome,
-              size: 32,
-              color: Colors.white,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Image.asset(
+                'assets/images/logo.png',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: purpleColor.withOpacity(0.1),
+                  child: const Icon(Icons.broken_image, color: purpleColor),
+                ),
+              ),
             ),
           ),
         )
