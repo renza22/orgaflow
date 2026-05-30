@@ -146,18 +146,6 @@ class EnhancedAppBar extends StatelessWidget implements PreferredSizeWidget {
             if (isSmallScreen) Spacer(),
             const SizedBox(width: 16),
 
-            // Dark mode toggle (desktop/tablet)
-            if (!isSmallScreen)
-              IconButton(
-                icon: const Icon(Icons.dark_mode_outlined),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Dark mode toggle')),
-                  );
-                },
-                color: Colors.grey.shade700,
-                tooltip: 'Toggle dark mode',
-              ),
 
             // On small screens, place search button to the right next to notifications
             if (isSmallScreen) ...[

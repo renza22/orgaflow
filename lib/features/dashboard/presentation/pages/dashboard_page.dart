@@ -57,16 +57,266 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     _updateTime();
     unawaited(_loadSessionContext());
     unawaited(_loadProjects());
-    _loadActivityLogs();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _updateTime();
     });
   }
 
-  void _loadActivityLogs() {
-    setState(() {
-      _activityLogs = ActivityLog.getMockData();
-    });
+  Future<void> _loadActivityLogs() async {
+    try {
+      final context = _sessionContext;
+      final organizationId = context?.activeMember?.organizationId?.trim();
+      if (organizationId == null || organizationId.isEmpty) {
+        return;
+      }
+
+      final List<ActivityLog> realLogs = [];
+
+      // 1. Fetch latest task assignments in organization
+      try {
+        final assignmentsResponse = await supabase
+            .from('task_assignments')
+            .select('''
+              id,
+              assigned_at,
+              task:tasks!inner(
+                title,
+                project:projects!inner(
+                  name,
+                  organization_id
+                )
+              ),
+              member:members!inner(
+                profile:profiles!inner(
+                  full_name
+                )
+              ),
+              assigned_by
+            ''')
+            .eq('task.project.organization_id', organizationId)
+            .order('assigned_at', ascending: false)
+            .limit(10);
+
+        if (assignmentsResponse != null) {
+          final list = assignmentsResponse as List;
+          final assignedByIds = list
+              .map((row) => row['assigned_by']?.toString())
+              .where((id) => id != null && id.isNotEmpty)
+              .toSet()
+              .toList();
+
+          final Map<String, String> profileNames = {};
+          if (assignedByIds.isNotEmpty) {
+            final profilesResponse = await supabase
+                .from('profiles')
+                .select('id, full_name')
+                .inFilter('id', assignedByIds);
+            if (profilesResponse != null) {
+              for (final p in profilesResponse as List) {
+                final id = p['id']?.toString();
+                final name = p['full_name']?.toString();
+                if (id != null && name != null) {
+                  profileNames[id] = name;
+                }
+              }
+            }
+          }
+
+          for (final row in list) {
+            final id = row['id']?.toString() ?? '';
+            final assignedAt = DateTime.tryParse(row['assigned_at']?.toString() ?? '') ?? DateTime.now();
+            final task = row['task'] as Map?;
+            final taskTitle = task?['title']?.toString() ?? '-';
+            final project = task?['project'] as Map?;
+            final projectName = project?['name']?.toString() ?? '-';
+            final member = row['member'] as Map?;
+            final memberProfile = member?['profile'] as Map?;
+            final targetName = memberProfile?['full_name']?.toString() ?? '-';
+            final assignedById = row['assigned_by']?.toString();
+            final actorName = (assignedById != null)
+                ? (profileNames[assignedById] ?? 'Admin')
+                : 'Admin';
+
+            realLogs.add(ActivityLog(
+              id: 'assignment_$id',
+              type: ActivityType.taskAssigned,
+              message: "$actorName menugaskan '$taskTitle' kepada $targetName.",
+              timestamp: assignedAt.toLocal(),
+              actorName: actorName,
+              targetName: targetName,
+              projectName: projectName,
+              taskName: taskTitle,
+              isSystemAction: false,
+            ));
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to load assignments for activity logs: $e');
+      }
+
+      // 2. Fetch latest tasks created/completed in organization
+      try {
+        final tasksResponse = await supabase
+            .from('tasks')
+            .select('''
+              id,
+              title,
+              status,
+              created_at,
+              updated_at,
+              project:projects!inner(
+                name,
+                organization_id
+              ),
+              created_by
+            ''')
+            .eq('project.organization_id', organizationId)
+            .order('created_at', ascending: false)
+            .limit(10);
+
+        if (tasksResponse != null) {
+          final list = tasksResponse as List;
+          final createdByIds = list
+              .map((row) => row['created_by']?.toString())
+              .where((id) => id != null && id.isNotEmpty)
+              .toSet()
+              .toList();
+
+          final Map<String, String> profileNames = {};
+          if (createdByIds.isNotEmpty) {
+            final profilesResponse = await supabase
+                .from('profiles')
+                .select('id, full_name')
+                .inFilter('id', createdByIds);
+            if (profilesResponse != null) {
+              for (final p in profilesResponse as List) {
+                final id = p['id']?.toString();
+                final name = p['full_name']?.toString();
+                if (id != null && name != null) {
+                  profileNames[id] = name;
+                }
+              }
+            }
+          }
+
+          for (final row in list) {
+            final id = row['id']?.toString() ?? '';
+            final status = row['status']?.toString() ?? '';
+            final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '') ?? DateTime.now();
+            final updatedAt = DateTime.tryParse(row['updated_at']?.toString() ?? '') ?? DateTime.now();
+            final title = row['title']?.toString() ?? '-';
+            final project = row['project'] as Map?;
+            final projectName = project?['name']?.toString() ?? '-';
+            final createdById = row['created_by']?.toString();
+            final actorName = (createdById != null)
+                ? (profileNames[createdById] ?? 'Seseorang')
+                : 'Seseorang';
+
+            realLogs.add(ActivityLog(
+              id: 'task_created_$id',
+              type: ActivityType.taskCreated,
+              message: "$actorName membuat task baru '$title' pada proyek $projectName.",
+              timestamp: createdAt.toLocal(),
+              actorName: actorName,
+              projectName: projectName,
+              taskName: title,
+              isSystemAction: false,
+            ));
+
+            if (status == 'done') {
+              realLogs.add(ActivityLog(
+                id: 'task_completed_$id',
+                type: ActivityType.taskCompleted,
+                message: "Task '$title' pada proyek $projectName telah diselesaikan.",
+                timestamp: updatedAt.toLocal(),
+                projectName: projectName,
+                taskName: title,
+                isSystemAction: false,
+              ));
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to load tasks for activity logs: $e');
+      }
+
+      // 3. Fetch latest rebalance items in organization
+      try {
+        final rebalanceResponse = await supabase
+            .from('rebalance_items')
+            .select('''
+              id,
+              created_at,
+              task:tasks!inner(
+                title,
+                project:projects!inner(
+                  name,
+                  organization_id
+                )
+              ),
+              from_member:members(
+                profile:profiles!inner(
+                  full_name
+                )
+              ),
+              to_member:members(
+                profile:profiles!inner(
+                  full_name
+                )
+              )
+            ''')
+            .eq('task.project.organization_id', organizationId)
+            .order('created_at', ascending: false)
+            .limit(10);
+
+        if (rebalanceResponse != null) {
+          for (final row in rebalanceResponse as List) {
+            final id = row['id']?.toString() ?? '';
+            final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '') ?? DateTime.now();
+            final task = row['task'] as Map?;
+            final taskTitle = task?['title']?.toString() ?? '-';
+            final project = task?['project'] as Map?;
+            final projectName = project?['name']?.toString() ?? '-';
+            
+            final fromMember = row['from_member'] as Map?;
+            final fromMemberProfile = fromMember?['profile'] as Map?;
+            final fromName = fromMemberProfile?['full_name']?.toString() ?? 'Seseorang';
+            
+            final toMember = row['to_member'] as Map?;
+            final toMemberProfile = toMember?['profile'] as Map?;
+            final toName = toMemberProfile?['full_name']?.toString() ?? 'Seseorang';
+
+            realLogs.add(ActivityLog(
+              id: 'rebalance_$id',
+              type: ActivityType.autoBalance,
+              message: "Sistem otomatis merebalance '$taskTitle' dari $fromName ke $toName.",
+              timestamp: createdAt.toLocal(),
+              actorName: 'Sistem',
+              targetName: toName,
+              projectName: projectName,
+              taskName: taskTitle,
+              isSystemAction: true,
+            ));
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to load rebalance items for activity logs: $e');
+      }
+
+      // Sort all logs by timestamp descending and take 10 latest
+      realLogs.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      final finalLogs = realLogs.take(10).toList();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _activityLogs = finalLogs;
+      });
+    } catch (e) {
+      debugPrint('Error loading real activity logs: $e');
+    }
   }
 
   @override
@@ -129,6 +379,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
       setState(() {
         _sessionContext = contextData;
       });
+      unawaited(_loadActivityLogs());
     } catch (error) {
       if (!mounted) {
         return;

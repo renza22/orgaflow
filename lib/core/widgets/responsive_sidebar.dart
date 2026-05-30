@@ -37,6 +37,7 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
   String? _avatarSignedUrl;
   double _loadPercentage = 0;
   bool _isOverload = false;
+  int _overloadCount = 0;
 
   @override
   void initState() {
@@ -74,6 +75,40 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
           capacityMax > 0 ? (capacityUsed / capacityMax * 100).toDouble() : 0.0;
       final isOverload = loadPercentage >= 100;
 
+      // Fetch actual burnout alerts count from organization fairness summary
+      int overloadCount = 0;
+      final orgId = activeMember?.organizationId?.trim();
+      if (orgId != null && orgId.isNotEmpty) {
+        try {
+          final summaryResponse = await supabase.rpc(
+            'get_organization_fairness_summary',
+            params: {
+              'p_organization_id': orgId,
+            },
+          );
+          if (summaryResponse != null) {
+            final Map<String, dynamic>? row;
+            if (summaryResponse is Map) {
+              row = Map<String, dynamic>.from(summaryResponse);
+            } else if (summaryResponse is List && summaryResponse.isNotEmpty) {
+              row = Map<String, dynamic>.from(summaryResponse.first as Map);
+            } else {
+              row = null;
+            }
+            if (row != null) {
+              final val = row['overload_count'];
+              if (val is num) {
+                overloadCount = val.toInt();
+              } else {
+                overloadCount = num.tryParse(val?.toString() ?? '')?.toInt() ?? 0;
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Failed to load burnout alerts: $e');
+        }
+      }
+
       if (!mounted) {
         return;
       }
@@ -90,6 +125,7 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
         _avatarSignedUrl = avatarSignedUrl;
         _loadPercentage = loadPercentage;
         _isOverload = isOverload;
+        _overloadCount = overloadCount;
         _isLoadingUser = false;
       });
     } catch (_) {
@@ -217,7 +253,7 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
           ),
 
           // Burnout Alerts
-          if (!_isCollapsed)
+          if (!collapsed && _overloadCount > 0)
             Container(
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(16),
@@ -237,7 +273,7 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '3 Burnout Alerts',
+                          '$_overloadCount Burnout Alert${_overloadCount > 1 ? "s" : ""}',
                           style: TextStyle(
                             color: Colors.red.shade700,
                             fontWeight: FontWeight.w600,

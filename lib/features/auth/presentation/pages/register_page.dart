@@ -291,6 +291,30 @@ class _RegisterPageState extends State<RegisterPage>
                 ),
               ),
             ),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Color(0xFF8B5CF6)),
+                    onPressed: () {
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      } else {
+                        Navigator.pushReplacementNamed(context, '/auth');
+                      }
+                    },
+                    tooltip: 'Back',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.8),
+                      elevation: 4,
+                      shadowColor: const Color(0xFF8B5CF6).withOpacity(0.2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
