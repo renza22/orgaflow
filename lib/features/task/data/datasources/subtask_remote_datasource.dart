@@ -39,7 +39,7 @@ class SubtaskRemoteDatasource {
       'created_by': createdBy,
     }).select().single();
 
-    return SubtaskModel.fromJson(response as Map<String, dynamic>);
+    return SubtaskModel.fromJson(response);
   }
 
   Future<SubtaskModel> updateSubtask({
@@ -68,7 +68,7 @@ class SubtaskRemoteDatasource {
         .select()
         .single();
 
-    return SubtaskModel.fromJson(response as Map<String, dynamic>);
+    return SubtaskModel.fromJson(response);
   }
 
   Future<void> deleteSubtask(String subtaskId) async {

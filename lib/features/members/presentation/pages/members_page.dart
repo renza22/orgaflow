@@ -237,13 +237,10 @@ class _MembersPageState extends State<MembersPage> {
 
   Widget _buildStatsCards(bool isSmallScreen) {
     final cards = [
-      _StatCardData('Total', '$_totalMembers', null, null),
-      _StatCardData(
-          'Aman', '$_safeCount', Colors.green.shade700, Colors.green.shade50),
-      _StatCardData('Warning', '$_warningCount', Colors.orange.shade700,
-          Colors.orange.shade50),
-      _StatCardData('Overload', '$_overloadCount', Colors.red.shade900,
-          Colors.red.shade50),
+      _StatCardData('Total', '$_totalMembers', Colors.grey.shade800, Colors.grey.shade100, Icons.people),
+      _StatCardData('Aman', '$_safeCount', Colors.green.shade700, Colors.green.shade50, Icons.check_circle),
+      _StatCardData('Warning', '$_warningCount', Colors.orange.shade700, Colors.orange.shade50, Icons.warning_amber),
+      _StatCardData('Overload', '$_overloadCount', Colors.red.shade700, Colors.red.shade50, Icons.error),
     ];
 
     if (isSmallScreen) {
@@ -255,6 +252,7 @@ class _MembersPageState extends State<MembersPage> {
               card.value,
               card.textColor,
               card.backgroundColor,
+              card.icon,
             ),
             if (card != cards.last) const SizedBox(height: 12),
           ],
@@ -279,6 +277,7 @@ class _MembersPageState extends State<MembersPage> {
                   card.value,
                   card.textColor,
                   card.backgroundColor,
+                  card.icon,
                 ),
               ),
           ],
@@ -292,33 +291,60 @@ class _MembersPageState extends State<MembersPage> {
     String value,
     Color? textColor,
     Color? bgColor,
+    IconData? icon,
   ) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: bgColor ?? Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: textColor?.withValues(alpha: 0.2) ?? Colors.grey.shade200,
-        ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: bgColor ?? Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon ?? Icons.info,
               color: textColor ?? Colors.grey.shade600,
+              size: 24,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: textColor ?? Colors.black,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: textColor ?? Colors.black,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -704,10 +730,12 @@ class _StatCardData {
     this.value,
     this.textColor,
     this.backgroundColor,
+    this.icon,
   );
 
   final String label;
   final String value;
   final Color? textColor;
   final Color? backgroundColor;
+  final IconData? icon;
 }

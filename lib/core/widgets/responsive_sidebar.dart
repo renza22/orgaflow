@@ -77,7 +77,7 @@ class _ResponsiveSidebarState extends State<ResponsiveSidebar> {
 
       // Fetch actual burnout alerts count from organization fairness summary
       int overloadCount = 0;
-      final orgId = activeMember?.organizationId?.trim();
+      final orgId = activeMember?.organizationId.trim();
       if (orgId != null && orgId.isNotEmpty) {
         try {
           final summaryResponse = await supabase.rpc(

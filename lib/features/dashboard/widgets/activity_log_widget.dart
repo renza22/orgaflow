@@ -17,15 +17,15 @@ class ActivityLogWidget extends StatelessWidget {
     final isSmallScreen = screenWidth < 600;
 
     return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+      padding: EdgeInsets.all(isSmallScreen ? 20 : 28),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
@@ -37,30 +37,34 @@ class ActivityLogWidget extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Riwayat Aktivitas',
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 18 : 20,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1F2937),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Riwayat Aktivitas',
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 18 : 20,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1F2937),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Catatan kronologis perpindahan tugas dan aktivitas sistem',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
+                    const SizedBox(height: 4),
+                    Text(
+                      'Catatan kronologis perpindahan tugas dan aktivitas sistem',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade600,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // Activity List
           if (activities.isEmpty)
@@ -91,7 +95,7 @@ class ActivityLogWidget extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: activities.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
+              separatorBuilder: (context, index) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
                 return _buildActivityItem(activities[index], isSmallScreen);
               },
@@ -103,60 +107,70 @@ class ActivityLogWidget extends StatelessWidget {
 
   Widget _buildActivityItem(ActivityLog activity, bool isSmallScreen) {
     return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+      padding: EdgeInsets.all(isSmallScreen ? 14 : 16),
       decoration: BoxDecoration(
-        color: activity.isSystemAction ? const Color(0xFFF3F4F6) : Colors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: activity.isSystemAction
-              ? const Color(0xFFE5E7EB)
-              : Colors.grey.shade200,
-        ),
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Icon
           Container(
-            width: isSmallScreen ? 36 : 40,
-            height: isSmallScreen ? 36 : 40,
+            width: isSmallScreen ? 40 : 44,
+            height: isSmallScreen ? 40 : 44,
             decoration: BoxDecoration(
-              color: _getActivityColor(activity.type).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: _getActivityColor(activity.type).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               _getActivityIcon(activity.type),
-              size: isSmallScreen ? 18 : 20,
+              size: isSmallScreen ? 20 : 22,
               color: _getActivityColor(activity.type),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
 
           // Content
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Text(
+                  activity.message,
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 14 : 15,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF1F2937),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
                   children: [
+                    Icon(
+                      Icons.access_time,
+                      size: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                    const SizedBox(width: 6),
                     Text(
-                      activity.message,
+                      activity.timeAgo,
                       style: TextStyle(
-                        fontSize: isSmallScreen ? 13 : 14,
-                        color: const Color(0xFF1F2937),
-                        height: 1.5,
+                        fontSize: 13,
+                        color: Colors.grey.shade600,
                       ),
                     ),
                     if (activity.isSystemAction) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(width: 10),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
-                          vertical: 4,
+                          vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF6C5CE7).withOpacity(0.1),
+                          color: const Color(0xFF6C5CE7).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -169,46 +183,6 @@ class ActivityLogWidget extends StatelessWidget {
                         ),
                       ),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.access_time,
-                      size: 14,
-                      color: Colors.grey.shade500,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      activity.timeAgo,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    if (activity.type == ActivityType.autoBalance)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00CEC9).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'Terbaru',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF00CEC9),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ],

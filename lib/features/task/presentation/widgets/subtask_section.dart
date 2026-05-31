@@ -54,7 +54,7 @@ class SubtaskSection extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '${_completedCount}/${subtasks.length}',
+                      '$_completedCount/${subtasks.length}',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,

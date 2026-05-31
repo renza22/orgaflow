@@ -866,17 +866,17 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage>
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ).copyWith(
-                  elevation: MaterialStateProperty.resolveWith<double>(
-                    (Set<MaterialState> states) {
-                      if (states.contains(MaterialState.hovered)) {
+                  elevation: WidgetStateProperty.resolveWith<double>(
+                    (Set<WidgetState> states) {
+                      if (states.contains(WidgetState.hovered)) {
                         return 4;
                       }
                       return 0;
                     },
                   ),
-                  backgroundColor: MaterialStateProperty.resolveWith<Color>(
-                    (Set<MaterialState> states) {
-                      if (states.contains(MaterialState.hovered)) {
+                  backgroundColor: WidgetStateProperty.resolveWith<Color>(
+                    (Set<WidgetState> states) {
+                      if (states.contains(WidgetState.hovered)) {
                         return theme.colorScheme.primary.withOpacity(0.05);
                       }
                       return Colors.transparent;
@@ -1200,17 +1200,17 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage>
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12)),
                               ).copyWith(
-                                elevation: MaterialStateProperty.resolveWith<double>(
-                                  (Set<MaterialState> states) {
-                                    if (states.contains(MaterialState.hovered)) {
+                                elevation: WidgetStateProperty.resolveWith<double>(
+                                  (Set<WidgetState> states) {
+                                    if (states.contains(WidgetState.hovered)) {
                                       return 4;
                                     }
                                     return 0;
                                   },
                                 ),
-                                backgroundColor: MaterialStateProperty.resolveWith<Color>(
-                                  (Set<MaterialState> states) {
-                                    if (states.contains(MaterialState.hovered)) {
+                                backgroundColor: WidgetStateProperty.resolveWith<Color>(
+                                  (Set<WidgetState> states) {
+                                    if (states.contains(WidgetState.hovered)) {
                                       return theme.colorScheme.primary.withOpacity(0.05);
                                     }
                                     return Colors.transparent;
@@ -1320,7 +1320,7 @@ class _OrganizationChoicePageState extends State<OrganizationChoicePage>
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           decoration: InputDecoration(
             filled: true,
             fillColor: theme.scaffoldBackgroundColor,
