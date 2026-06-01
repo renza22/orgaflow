@@ -3,6 +3,7 @@ import '../../data/repositories/fairness_repository.dart';
 import '../../domain/models/fairness_summary_model.dart';
 import '../../domain/models/fairness_trend_model.dart';
 import '../../domain/models/member_fairness_breakdown_model.dart';
+import '../../models/rebalance_model.dart';
 
 class FairnessPresenter {
   FairnessPresenter({
@@ -45,6 +46,28 @@ class FairnessPresenter {
     return _repository.refreshOrganizationFairnessScores(
       organizationId: organizationId,
       scoreDate: scoreDate,
+    );
+  }
+
+  Future<Result<List<RebalanceItem>>> generateAutoRebalancePlan({
+    required String organizationId,
+    int maxItems = 5,
+    String? projectId,
+  }) {
+    return _repository.generateAutoRebalancePlan(
+      organizationId: organizationId,
+      maxItems: maxItems,
+      projectId: projectId,
+    );
+  }
+
+  Future<Result<Map<String, dynamic>>> executeRebalancePlan({
+    required String planId,
+    required List<String> itemIds,
+  }) {
+    return _repository.executeRebalancePlan(
+      planId: planId,
+      itemIds: itemIds,
     );
   }
 }

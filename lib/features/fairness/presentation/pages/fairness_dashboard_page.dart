@@ -8,6 +8,7 @@ import '../../../../core/result/result.dart';
 import '../../../../core/session/session_service.dart';
 import '../../../../core/widgets/enhanced_app_bar.dart';
 import '../../../../core/widgets/responsive_sidebar.dart';
+import '../../../organization/domain/models/member_model.dart';
 import '../../domain/models/fairness_summary_model.dart';
 import '../../domain/models/fairness_trend_model.dart';
 import '../../domain/models/member_fairness_breakdown_model.dart';
@@ -31,6 +32,7 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
   String? _errorMessage;
   bool _isLoading = true;
   bool _isRefreshingSnapshot = false;
+  bool _canUseRebalance = false;
 
   @override
   void initState() {
@@ -46,9 +48,13 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
       });
     }
 
+    var canUseRebalance = false;
+
     try {
       final context = await sessionService.getCurrentContext(refresh: true);
-      final organizationId = context?.activeMember?.organizationId.trim();
+      final activeMember = context?.activeMember;
+      final organizationId = activeMember?.organizationId.trim();
+      canUseRebalance = _isAdminSideMember(activeMember);
 
       if (!mounted) {
         return;
@@ -60,6 +66,7 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
           _summary = null;
           _memberBreakdown = const [];
           _fairnessTrend = const [];
+          _canUseRebalance = false;
           _errorMessage = 'User belum memiliki organisasi aktif.';
           _isLoading = false;
         });
@@ -99,6 +106,7 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
           _summary = null;
           _memberBreakdown = const [];
           _fairnessTrend = const [];
+          _canUseRebalance = canUseRebalance;
           _errorMessage = errorMessage;
           _isLoading = false;
         });
@@ -109,6 +117,7 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
         _summary = summaryResult.data;
         _memberBreakdown = breakdownResult.data ?? const [];
         _fairnessTrend = trendResult.data ?? const [];
+        _canUseRebalance = canUseRebalance;
         _errorMessage = null;
         _isLoading = false;
       });
@@ -121,6 +130,7 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
         _summary = null;
         _memberBreakdown = const [];
         _fairnessTrend = const [];
+        _canUseRebalance = canUseRebalance;
         _errorMessage = ErrorMapper.map(error).message;
         _isLoading = false;
       });
@@ -165,6 +175,39 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
       _isRefreshingSnapshot = false;
     });
     _showMessage('Snapshot fairness diperbarui.');
+  }
+
+  Future<void> _openRebalanceWizard() async {
+    if (!_canUseRebalance) {
+      return;
+    }
+
+    final result = await Navigator.pushNamed(context, '/rebalance-wizard');
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result == true) {
+      await _loadFairnessData(showLoading: false);
+    }
+  }
+
+  bool _isAdminSideMember(MemberModel? activeMember) {
+    if (activeMember == null) {
+      return false;
+    }
+
+    final role = activeMember.role.trim().toLowerCase();
+    if (role == 'owner' || role == 'admin') {
+      return true;
+    }
+
+    final positionCode = activeMember.positionCode?.trim().toLowerCase();
+    return positionCode == 'ketua_divisi' ||
+        positionCode == 'kadep' ||
+        positionCode == 'kepala_departemen' ||
+        positionCode == 'koordinator_divisi';
   }
 
   @override
@@ -819,13 +862,25 @@ class _FairnessDashboardPageState extends State<FairnessDashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Anggota Perlu Perhatian',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFFFF7675),
-            ),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Anggota Perlu Perhatian',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFFF7675),
+                  ),
+                ),
+              ),
+              if (_canUseRebalance)
+                TextButton.icon(
+                  onPressed: _openRebalanceWizard,
+                  icon: const Icon(Icons.auto_fix_high, size: 16),
+                  label: const Text('Rebalance'),
+                ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(
