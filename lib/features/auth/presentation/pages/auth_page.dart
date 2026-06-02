@@ -42,7 +42,9 @@ class _GradientButtonState extends State<_GradientButton> {
     const hoverTeal = Color(0xFF2DD4BF);
 
     return MouseRegion(
-      cursor: widget.onPressed != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      cursor: widget.onPressed != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
@@ -58,7 +60,7 @@ class _GradientButtonState extends State<_GradientButton> {
           boxShadow: _isHovered && widget.onPressed != null
               ? [
                   BoxShadow(
-                    color: purpleColor.withOpacity(0.4),
+                    color: purpleColor.withValues(alpha: 0.4),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -157,7 +159,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
     final password = passwordController.text.trim();
 
     if (identifier.isEmpty || password.isEmpty) {
-      showMessage('Email dan password wajib diisi');
+      showMessage('Email/NIM dan password wajib diisi');
       return;
     }
 
@@ -167,7 +169,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
       });
 
       final result = await (_presenter ??= AuthPresenter()).signIn(
-        email: identifier,
+        identifier: identifier,
         password: password,
       );
 
@@ -231,9 +233,9 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              purpleColor.withOpacity(0.15),
+              purpleColor.withValues(alpha: 0.15),
               theme.scaffoldBackgroundColor,
-              tealColor.withOpacity(0.15),
+              tealColor.withValues(alpha: 0.15),
             ],
           ),
         ),
@@ -293,8 +295,8 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          purpleColor.withOpacity(opacity * 0.3),
-                          purpleColor.withOpacity(opacity * 0.1),
+                          purpleColor.withValues(alpha: opacity * 0.3),
+                          purpleColor.withValues(alpha: opacity * 0.1),
                         ],
                       ),
                     ),
@@ -325,8 +327,8 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          tealColor.withOpacity(opacity * 0.4),
-                          tealColor.withOpacity(opacity * 0.1),
+                          tealColor.withValues(alpha: opacity * 0.4),
+                          tealColor.withValues(alpha: opacity * 0.1),
                         ],
                       ),
                     ),
@@ -360,8 +362,8 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            purpleColor.withOpacity(opacity * 0.35),
-                            purpleColor.withOpacity(opacity * 0.1),
+                            purpleColor.withValues(alpha: opacity * 0.35),
+                            purpleColor.withValues(alpha: opacity * 0.1),
                           ],
                         ),
                       ),
@@ -393,8 +395,8 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          tealColor.withOpacity(opacity * 0.38),
-                          tealColor.withOpacity(opacity * 0.1),
+                          tealColor.withValues(alpha: opacity * 0.38),
+                          tealColor.withValues(alpha: opacity * 0.1),
                         ],
                       ),
                     ),
@@ -426,8 +428,8 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          purpleColor.withOpacity(opacity * 0.3),
-                          purpleColor.withOpacity(opacity * 0.05),
+                          purpleColor.withValues(alpha: opacity * 0.3),
+                          purpleColor.withValues(alpha: opacity * 0.05),
                         ],
                       ),
                     ),
@@ -460,7 +462,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: purpleColor.withOpacity(0.2),
+                  color: purpleColor.withValues(alpha: 0.2),
                   blurRadius: 16,
                   offset: const Offset(0, 8),
                 ),
@@ -472,7 +474,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                 'assets/images/logo.png',
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) => Container(
-                  color: purpleColor.withOpacity(0.1),
+                  color: purpleColor.withValues(alpha: 0.1),
                   child: const Icon(Icons.broken_image, color: purpleColor),
                 ),
               ),
@@ -525,14 +527,14 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
   Widget _buildLoginCard(ThemeData theme) {
     return Container(
       decoration: BoxDecoration(
-        color: theme.cardColor.withOpacity(0.9),
+        color: theme.cardColor.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: theme.dividerColor.withOpacity(0.2),
+          color: theme.dividerColor.withValues(alpha: 0.2),
         ),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.05),
+            color: theme.colorScheme.primary.withValues(alpha: 0.05),
             blurRadius: 40,
             spreadRadius: 0,
             offset: const Offset(0, 20),
@@ -580,7 +582,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: theme.dividerColor.withOpacity(0.3),
+            color: theme.dividerColor.withValues(alpha: 0.3),
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -607,7 +609,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
         suffixIcon: IconButton(
           icon: Icon(
             showPassword ? Icons.visibility_off : Icons.visibility,
-            color: theme.colorScheme.primary.withOpacity(0.6),
+            color: theme.colorScheme.primary.withValues(alpha: 0.6),
           ),
           onPressed: () => setState(() => showPassword = !showPassword),
         ),
@@ -617,7 +619,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: theme.dividerColor.withOpacity(0.3),
+            color: theme.dividerColor.withValues(alpha: 0.3),
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -654,7 +656,8 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                 'Ingat saya',
                 style: TextStyle(
                   fontSize: 14,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                  color:
+                      theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
                 ),
               ),
             ],

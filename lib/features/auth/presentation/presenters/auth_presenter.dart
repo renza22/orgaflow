@@ -17,11 +17,11 @@ class AuthPresenter {
   final SessionService _sessionService;
 
   Future<Result<AppRouteTarget>> signIn({
-    required String email,
+    required String identifier,
     required String password,
   }) async {
-    final signInResult = await _repository.signIn(
-      email: email,
+    final signInResult = await _repository.signInWithIdentifier(
+      identifier: identifier,
       password: password,
     );
 

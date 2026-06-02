@@ -59,7 +59,7 @@ class ErrorMapper {
     final normalized = message.toLowerCase();
 
     if (normalized.contains('invalid login credentials')) {
-      return 'Email atau password tidak valid.';
+      return 'Email/NIM atau password salah.';
     }
 
     if (normalized.contains('email not confirmed')) {

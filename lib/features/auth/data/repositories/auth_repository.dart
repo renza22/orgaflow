@@ -1,3 +1,6 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../../core/errors/app_error.dart';
 import '../../../../core/errors/error_mapper.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/session/session_service.dart';
@@ -14,18 +17,55 @@ class AuthRepository {
 
   final AuthRemoteDatasource _remoteDatasource;
   final SessionService _sessionService;
+  static const String _loginFailureMessage = 'Email/NIM atau password salah.';
 
   Future<Result<void>> signIn({
     required String email,
     required String password,
+  }) {
+    return signInWithIdentifier(
+      identifier: email,
+      password: password,
+    );
+  }
+
+  Future<Result<void>> signInWithIdentifier({
+    required String identifier,
+    required String password,
   }) async {
     try {
+      final normalizedIdentifier = identifier.trim();
+      if (normalizedIdentifier.isEmpty) {
+        return Result<void>.failure(
+          const AppError(_loginFailureMessage),
+        );
+      }
+
+      final resolvedEmail = normalizedIdentifier.contains('@')
+          ? normalizedIdentifier
+          : await _remoteDatasource.resolveEmailByNim(normalizedIdentifier);
+      final email = resolvedEmail?.trim();
+
+      if (email == null || email.isEmpty) {
+        return Result<void>.failure(
+          const AppError(_loginFailureMessage),
+        );
+      }
+
       await _remoteDatasource.signIn(
         email: email,
         password: password,
       );
       await _sessionService.clearCache();
       return Result<void>.success(null);
+    } on AuthException catch (error) {
+      return Result<void>.failure(
+        AppError(_loginFailureMessage, cause: error),
+      );
+    } on PostgrestException catch (error) {
+      return Result<void>.failure(
+        AppError(_loginFailureMessage, cause: error),
+      );
     } catch (error) {
       return Result<void>.failure(ErrorMapper.map(error));
     }

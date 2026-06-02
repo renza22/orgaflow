@@ -20,6 +20,22 @@ class AuthRemoteDatasource {
     );
   }
 
+  Future<String?> resolveEmailByNim(String nim) async {
+    final response = await _client.rpc(
+      'resolve_login_email_by_nim',
+      params: {
+        'p_nim': nim,
+      },
+    );
+
+    final email = (response as String?)?.trim();
+    if (email == null || email.isEmpty) {
+      return null;
+    }
+
+    return email;
+  }
+
   Future<void> requestPasswordReset({
     required String email,
   }) {
